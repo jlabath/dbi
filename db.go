@@ -80,6 +80,77 @@ func deduceHowToScanVal(col *Col, src Scanner) (interface{}, error) {
 	}
 }
 
+var ErrPrimaryKeyOverflow = errors.New("Last insert ID returned by database overflows model's type.")
+
+func doesIntMatch(someint interface{}, orig int64) bool {
+	switch someint := someint.(type) {
+	case int64:
+		return someint == orig
+	case int:
+		return int64(someint) == orig
+	case int32:
+		return int64(someint) == orig
+	case int16:
+		return int64(someint) == orig
+	case int8:
+		return int64(someint) == orig
+	case uint:
+		return int64(someint) == orig
+	case uint64:
+		return int64(someint) == orig
+	case uint32:
+		return int64(someint) == orig
+	case uint16:
+		return int64(someint) == orig
+	case uint8:
+		return int64(someint) == orig
+	}
+	return false
+}
+
+func forceToTypeOfVal(col *Col, liid int64) (interface{}, error) {
+	chk := func(i interface{}) error {
+		if !doesIntMatch(i, liid) {
+			return ErrPrimaryKeyOverflow
+		}
+		return nil
+	}
+	switch col.Val.(type) {
+	case int:
+		v := int(liid)
+		return v, chk(v)
+	case int64:
+		return liid, nil
+	case int32:
+		v := int32(liid)
+		return v, chk(v)
+	case int16:
+		v := int16(liid)
+		return v, chk(v)
+	case int8:
+		v := int8(liid)
+		return v, chk(v)
+	case uint:
+		v := uint(liid)
+		return v, chk(v)
+	case uint64:
+		v := uint64(liid)
+		return v, chk(v)
+	case uint32:
+		v := uint32(liid)
+		return v, chk(v)
+	case uint16:
+		v := uint16(liid)
+		return v, chk(v)
+	case uint8:
+		v := uint8(liid)
+		return v, chk(v)
+	default:
+		err := fmt.Errorf("Expected integer type for Val of PrimaryKey but got %T", col.Val)
+		return nil, err
+	}
+}
+
 //ErrNewScannerInstance is returned when H was not able to create a new instance of T
 var ErrNewScannerInstance = errors.New("Unable to create new instance, ensure type implements DBScanner() or implement custom DBNew().")
 
@@ -169,16 +240,16 @@ func (db *H) Insert(s RowMarshaler) (Col, error) {
 	fmt.Fprintln(db.lw, "BEGIN")
 	tx, err := db.conn.Begin()
 	fmt.Fprintln(db.lw, buf.String(), args)
-	_, err = tx.Exec(buf.String(), args...)
+	result, err := tx.Exec(buf.String(), args...)
 	if err != nil {
 		fmt.Fprintln(db.lw, "ROLLBACK")
-		tx.Rollback()
+		_ = tx.Rollback()
 		return retPK, err
 	}
-	retPK, err = db.lastInsertPKID(tx, s)
+	retPK, err = db.lastInsertPKID(tx, s, result)
 	if err != nil {
 		fmt.Fprintln(db.lw, "ROLLBACK")
-		tx.Rollback()
+		_ = tx.Rollback()
 		return retPK, err
 	}
 	fmt.Fprintln(db.lw, "COMMIT")
@@ -186,7 +257,7 @@ func (db *H) Insert(s RowMarshaler) (Col, error) {
 	return retPK, err
 }
 
-func (db *H) lastInsertPKID(tx *sql.Tx, s RowMarshaler) (Col, error) {
+func (db *H) lastInsertPKID(tx *sql.Tx, s RowMarshaler, result sql.Result) (Col, error) {
 	var (
 		buf   bytes.Buffer
 		retPK Col
@@ -202,6 +273,15 @@ func (db *H) lastInsertPKID(tx *sql.Tx, s RowMarshaler) (Col, error) {
 		return *pk, nil
 	}
 	retPK.Name = pk.Name
+	//ok check if we can get it from result if driver implements this
+	if liid, err := result.LastInsertId(); err == nil {
+		cnvtLiid, err := forceToTypeOfVal(pk, liid)
+		if err == nil {
+			retPK.Val = cnvtLiid
+			return retPK, nil
+		}
+		return retPK, err
+	}
 	buf.WriteString("SELECT ")
 	buf.WriteString(pk.Name)
 	buf.WriteString(" FROM ")
@@ -230,7 +310,7 @@ func (db *H) lastInsertPKID(tx *sql.Tx, s RowMarshaler) (Col, error) {
 	if rows.Next() {
 		retPK.Val, err = deduceHowToScanVal(pk, rows)
 	}
-	rows.Close()
+	err = rows.Close()
 	return retPK, err
 }
 
@@ -311,7 +391,7 @@ func (db *H) Select(s RowUnmarshaler, where string, args ...interface{}) ([]inte
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	results := make([]interface{}, 0, 20)
 	for rows.Next() {
 		r, err := newScannerInstance(s)

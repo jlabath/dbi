@@ -2,6 +2,7 @@ package dbi
 
 import (
 	"database/sql"
+	"errors"
 	"math/big"
 	"os"
 	"strings"
@@ -158,6 +159,19 @@ func (s *BasicSuite) Test4AnnualReports(c *C) {
 	c.Assert(ar4.NetIncome.String(), Equals, net.String())
 }
 
+var ErrBusted = errors.New("busted")
+
+type BustedResult struct {
+}
+
+func (b BustedResult) LastInsertId() (int64, error) {
+	return 0, ErrBusted
+}
+
+func (b BustedResult) RowsAffected() (int64, error) {
+	return 0, ErrBusted
+}
+
 func (s *BasicSuite) Test5PersonDemo(c *C) {
 	db := New(s.conn, cWriter{c})
 	p := &Person{
@@ -179,4 +193,17 @@ func (s *BasicSuite) Test5PersonDemo(c *C) {
 	results, err := db.Select(p, "WHERE last = ? ORDER BY last", "Moe")
 	c.Assert(err, IsNil)
 	c.Assert(results, HasLen, 1)
+	//test driver that does not support sql.Result
+	p1 := &Person{
+		FirstName: "A.T.",
+		LastName:  "Tappman",
+	}
+	pk, err = db.Insert(p1)
+	c.Assert(err, IsNil)
+	tx, err := s.conn.Begin()
+	c.Assert(err, IsNil)
+	newpk, err := db.lastInsertPKID(tx, p1, BustedResult{})
+	c.Assert(err, IsNil)
+	c.Assert(newpk.Val.(int), Equals, pk.Val.(int))
+	c.Assert(tx.Commit(), IsNil)
 }
