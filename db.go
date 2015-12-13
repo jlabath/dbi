@@ -80,6 +80,7 @@ func deduceHowToScanVal(col *Col, src Scanner) (interface{}, error) {
 	}
 }
 
+//ErrPrimaryKeyOverflow is returned sql.Result.LastInsertId overflows the declared int type
 var ErrPrimaryKeyOverflow = errors.New("Last insert ID returned by database overflows model's type.")
 
 func doesIntMatch(someint interface{}, orig int64) bool {
@@ -314,10 +315,16 @@ func (db *H) lastInsertPKID(tx *sql.Tx, s RowMarshaler, result sql.Result) (Col,
 	return retPK, err
 }
 
+//ErrNotFound returned when the row with the given primary key was not found
+var ErrNotFound = errors.New("Record with given primary key not found.")
+
 //Get a record from SQL using the supplied PrimaryKey
 func (db *H) Get(s RowUnmarshaler) error {
 	row := s.DBRow()
 	pkey := getPKFromColumns(row)
+	if pkey == nil {
+		return ErrNoPrimaryKey
+	}
 	var buf bytes.Buffer
 	buf.WriteString("SELECT ")
 	for i, v := range row {
@@ -334,6 +341,9 @@ func (db *H) Get(s RowUnmarshaler) error {
 	fmt.Fprintln(db.lw, buf.String(), pkey.Val)
 	dbrow := db.conn.QueryRow(buf.String(), pkey.Val)
 	err := s.DBScan(dbrow)
+	if err == sql.ErrNoRows {
+		return ErrNotFound
+	}
 	return err
 }
 
@@ -341,6 +351,9 @@ func (db *H) Get(s RowUnmarshaler) error {
 func (db *H) Update(s RowUnmarshaler) error {
 	row := s.DBRow()
 	pkey := getPKFromColumns(row)
+	if pkey == nil {
+		return ErrNoPrimaryKey
+	}
 	args := make([]interface{}, 0, len(row))
 	var buf bytes.Buffer
 	buf.WriteString("UPDATE ")
@@ -362,7 +375,12 @@ func (db *H) Update(s RowUnmarshaler) error {
 	buf.WriteString("=?")
 	args = append(args, pkey.Val)
 	fmt.Fprintln(db.lw, buf.String(), args)
-	_, err := db.conn.Exec(buf.String(), args...)
+	res, err := db.conn.Exec(buf.String(), args...)
+	if err == nil {
+		if n, err := res.RowsAffected(); err == nil && n == 0 {
+			return ErrNotFound
+		}
+	}
 	return err
 }
 
@@ -405,6 +423,27 @@ func (db *H) Select(s RowUnmarshaler, where string, args ...interface{}) ([]inte
 		results = append(results, r)
 	}
 	return results, nil
+}
+
+//ErrNoPrimaryKey is returned when the model does not have a column marked as PrimaryKey
+var ErrNoPrimaryKey = errors.New("No primary key defined. Use PrimaryKey flag.")
+
+//Delete deletes a single row from db using the given models PrimaryKey
+func (db *H) Delete(s RowMarshaler) error {
+	row := s.DBRow()
+	pkey := getPKFromColumns(row)
+	if pkey == nil {
+		return ErrNoPrimaryKey
+	}
+	var buf bytes.Buffer
+	buf.WriteString("DELETE FROM ")
+	buf.WriteString(s.DBName())
+	buf.WriteString(" WHERE ")
+	buf.WriteString(pkey.Name)
+	buf.WriteString("=?")
+	fmt.Fprintln(db.lw, buf.String(), pkey.Val)
+	_, err := db.conn.Exec(buf.String(), pkey.Val)
+	return err
 }
 
 //DropTable executes DROP TABLE
