@@ -24,11 +24,6 @@ func (c *Company) DBRow() []Col {
 	}
 }
 
-func (c *Company) DBNew() DBScanner {
-	var n Company
-	return &n
-}
-
 func (c *Company) DBScan(scanner Scanner) error {
 	return scanner.Scan(&c.ID, &c.Name, &c.Ticker)
 }

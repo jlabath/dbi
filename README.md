@@ -9,7 +9,7 @@ DBI is an attempt to track my personal likes and dislikes after many years of us
 Likes:
 * Define your model, set attributes and save the model, which is then behind the scenes, persisted to DB.
 * Get an ID from somehwere and simply get the model from DB, then change it save it back again in few simple steps.
-* Get results as an array of models after running a query.
+* Get results of a query as a slice of models.
 * Never again misspel or forget a column name.
 
 Dislikes:
@@ -20,7 +20,9 @@ DBI gives maximum control to the user to define how models are stored and retrei
 
 This is a work in progress.
 
-```
+Define your models and implement required methods to satisfy RowMarshaler/RowUnmarshaller
+
+```golang
 type Person struct {
 	ID        int
 	FirstName string
@@ -47,9 +49,9 @@ func (p *Person) DBScan(scanner dbi.Scanner) error {
 }
 ```
   
-Usage then looks like this  
+Usage then looks like this
 
-```
+```golang
 
 db := dbi.New(conn, nil)
 p := &Person{
@@ -72,5 +74,6 @@ up.LastName = "Moe"
 err = db.Update(up)
 
 //query
-results, err := db.Select(p, "WHERE last = ? ORDER BY last", "Moe")
+var persons []Person
+err := db.Select(&persons, "WHERE last = ? ORDER BY last", "Moe")
 ```

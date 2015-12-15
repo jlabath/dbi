@@ -152,24 +152,25 @@ func forceToTypeOfVal(col *Col, liid int64) (interface{}, error) {
 	}
 }
 
-//ErrNewScannerInstance is returned when H was not able to create a new instance of T
-var ErrNewScannerInstance = errors.New("Unable to create new instance, ensure type implements DBScanner() or implement custom DBNew().")
+//ErrNoPointerToSlice is returned if dst argument to Select is not a pointer to slice.
+var ErrNoPointerToSlice = errors.New("Expected dst to be a pointer to a slice.")
 
-func newScannerInstance(something interface{}) (DBScanner, error) {
-	if n, ok := something.(DBNewer); ok {
-		//imlements newer so just return that
-		return n.DBNew(), nil
+//ErrNoUnmarshaler is returned when element of slice dst does not implement RowUnmarshaler
+var ErrNoUnmarshaler = errors.New("Elements of slice dst do not implement RowUnmarshaler.")
+
+func reflectBaseType(s interface{}) (reflect.Type, error) {
+	//need to reflect and make it
+	typ := reflect.TypeOf(s)
+	if typ.Kind() != reflect.Ptr {
+		return nil, ErrNoPointerToSlice
 	}
-	typ := reflect.TypeOf(something)
-	// if a pointer to a struct is passed, get the type of the dereferenced object
-	if typ.Kind() == reflect.Ptr {
-		typ = typ.Elem()
+	//typ of slice
+	typ = typ.Elem()
+	if typ.Kind() != reflect.Slice {
+		return nil, ErrNoPointerToSlice
 	}
-	nPtr := reflect.New(typ)
-	if n, ok := nPtr.Interface().(DBScanner); ok {
-		return n, nil
-	}
-	return nil, ErrNewScannerInstance
+	//get base type from slice
+	return typ.Elem(), nil
 }
 
 //H is our handle supporting Insert/Get/Update to be used by client
@@ -384,14 +385,34 @@ func (db *H) Update(s RowUnmarshaler) error {
 	return err
 }
 
-//Select runs an SQL query and returns sql.Rows and error if any
-//it uses the supplied source to call DBRow() to know what columns to ask for
-//the where is any where/order by/limit type of clause - if empty it will simply do SELECT col1,col2,... FROM table_name
+//Select runs an SQL query and populates dst and returns an error if any.
+//It uses the supplied source to call DBRow() to know what columns to ask for.
+//The where is any where/order by/limit type of clause - if empty it will simply do SELECT col1,col2,... FROM table_name
 //args are any params to be used in the SQL query to replace ?
-func (db *H) Select(s RowUnmarshaler, where string, args ...interface{}) ([]interface{}, error) {
+//It expects dst to be a pointer to a slice of RowUnmarshaler(s).
+func (db *H) Select(dst interface{}, where string, args ...interface{}) error {
 	var (
-		buf bytes.Buffer
+		buf          bytes.Buffer
+		btIsPointer  bool
+		baseBaseType reflect.Type
 	)
+	baseType, err := reflectBaseType(dst)
+	if err != nil {
+		return err
+	}
+	//now figure out if baseType is pointer since we support both
+	if baseType.Kind() == reflect.Ptr {
+		btIsPointer = true
+		baseBaseType = baseType.Elem()
+	} else {
+		baseBaseType = baseType
+	}
+	//crt new ptr to baseType
+	newT := reflect.New(baseBaseType)
+	s, isUnmarshaler := newT.Interface().(RowUnmarshaler)
+	if !isUnmarshaler {
+		return ErrNoUnmarshaler
+	}
 	row := s.DBRow()
 	buf.WriteString("SELECT ")
 	for i, v := range row {
@@ -407,22 +428,23 @@ func (db *H) Select(s RowUnmarshaler, where string, args ...interface{}) ([]inte
 	fmt.Fprintln(db.lw, buf.String(), args)
 	rows, err := db.conn.Query(buf.String(), args...)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() { _ = rows.Close() }()
-	results := make([]interface{}, 0, 20)
+	dstv := reflect.ValueOf(dst).Elem()
 	for rows.Next() {
-		r, err := newScannerInstance(s)
-		if err != nil {
-			return nil, err
-		}
+		r := reflect.New(baseBaseType).Interface().(DBScanner)
 		err = r.DBScan(rows)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		results = append(results, r)
+		vToAppend := reflect.ValueOf(r)
+		if !btIsPointer {
+			vToAppend = vToAppend.Elem()
+		}
+		dstv.Set(reflect.Append(dstv, vToAppend))
 	}
-	return results, nil
+	return nil
 }
 
 //ErrNoPrimaryKey is returned when the model does not have a column marked as PrimaryKey
@@ -525,10 +547,4 @@ type DBScanner interface {
 type RowUnmarshaler interface {
 	RowMarshaler
 	DBScanner
-}
-
-//DBNewer is something that has custom method DBNew to create a new instance of itself.
-//If model in question does not implement DBNewer, reflection will be used to create new instances.
-type DBNewer interface {
-	DBNew() DBScanner
 }

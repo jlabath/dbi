@@ -92,10 +92,10 @@ func (s *BasicSuite) Test2InsertSelect(c *C) {
 		_, err = db.Insert(cp)
 		c.Assert(err, IsNil)
 	}
-	results, err := db.Select(cp, "WHERE Ticker != ? ORDER BY ID", "INTC")
+	var results []*Company
+	err = db.Select(&results, "WHERE Ticker != ? ORDER BY ID", "INTC")
 	c.Assert(err, IsNil)
 	for _, v := range results {
-		v := v.(*Company)
 		c.Assert(v.Ticker, Not(Equals), "INTC")
 	}
 }
@@ -149,10 +149,11 @@ func (s *BasicSuite) Test4AnnualReports(c *C) {
 	c.Assert(ar3.Sales.String(), Equals, ar.Sales.String())
 	c.Assert(ar3.NetIncome.String(), Equals, net.String())
 	//now run query on the reports
-	results, err := db.Select(ar, "")
+	var results []AnnualReport
+	err = db.Select(&results, "")
 	c.Assert(err, IsNil)
 	c.Assert(results, HasLen, 1)
-	ar4 := results[0].(*AnnualReport)
+	ar4 := results[0]
 	c.Assert(ar4.CompanyID, Equals, cp.ID)
 	c.Assert(ar4.Year, Equals, 2015)
 	c.Assert(ar4.Sales.String(), Equals, ar.Sales.String())
@@ -190,7 +191,8 @@ func (s *BasicSuite) Test5PersonDemo(c *C) {
 	up.LastName = "Moe"
 	err = db.Update(up)
 	c.Assert(err, IsNil)
-	results, err := db.Select(p, "WHERE last = ? ORDER BY last", "Moe")
+	var results []Person
+	err = db.Select(&results, "WHERE last = ? ORDER BY last", "Moe")
 	c.Assert(err, IsNil)
 	c.Assert(results, HasLen, 1)
 	//test driver that does not support sql.Result
