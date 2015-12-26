@@ -37,7 +37,7 @@ func (p *Person) DBName() string {
 //serialize our struct
 func (p *Person) DBRow() []dbi.Col {
 	return []dbi.Col{
-		dbi.Col{"id", p.ID, &dbi.ColOpt{"SERIAL PRIMARY KEY", NoInsert | PrimaryKey}},
+		dbi.Col{"id", p.ID, &dbi.ColOpt{"SERIAL PRIMARY KEY", dbi.NoInsert | dbi.PrimaryKey}},
 		dbi.Col{"first", p.FirstName, nil},
 		dbi.Col{"last", p.LastName, nil},
 	}
@@ -53,7 +53,7 @@ Usage then looks like this
 
 ```golang
 
-db := dbi.New(conn, nil)
+db, err := dbi.New(sqlConn)
 p := &Person{
 	FirstName: "John",
 	LastName:  "Doe",

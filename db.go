@@ -173,21 +173,54 @@ func reflectBaseType(s interface{}) (reflect.Type, error) {
 	return typ.Elem(), nil
 }
 
+type placeHolderFunc func() string
+
+func defaultPlaceHolder() placeHolderFunc {
+	return func() string { return "?" }
+}
+
 //H is our handle supporting Insert/Get/Update to be used by client
 type H struct {
-	conn *sql.DB
-	lw   io.Writer
+	conn        Connection
+	lw          io.Writer
+	placeholder func() placeHolderFunc
+}
+
+func newH(conn Connection) *H {
+	return &H{
+		conn:        conn,
+		lw:          ioutil.Discard,
+		placeholder: defaultPlaceHolder}
 }
 
 //New return a new DB handle
-func New(conn *sql.DB, logw io.Writer) *H {
-	h := H{
-		conn: conn,
-		lw:   logw}
-	if logw == nil {
-		h.lw = ioutil.Discard
+func New(conn Connection, options ...func(*H) error) (*H, error) {
+	h := newH(conn)
+	for _, opt := range options {
+		if opt == nil {
+			continue
+		}
+		if err := opt(h); err != nil {
+			return h, err
+		}
 	}
-	return &h
+	return h, nil
+}
+
+func (db *H) setLogger(w io.Writer) error {
+	if w == nil {
+		return errors.New("logger writer is nil")
+	}
+	db.lw = w
+	return nil
+}
+
+//Logger is an optional configuration option if logging of SQL statements by dbi is desired
+//db, err := New(mySqlConn, Logger(myWriter))
+func Logger(w io.Writer) func(*H) error {
+	return func(db *H) error {
+		return db.setLogger(w)
+	}
 }
 
 //CreateTable executes CREATE TABLE as per DBRow()
@@ -216,6 +249,7 @@ func (db *H) Insert(s RowMarshaler) (Col, error) {
 		buf   bytes.Buffer
 		retPK Col
 	)
+	phFunc := db.placeholder()
 	buf.WriteString("INSERT INTO ")
 	buf.WriteString(s.DBName())
 	buf.WriteString("(")
@@ -236,34 +270,27 @@ func (db *H) Insert(s RowMarshaler) (Col, error) {
 		if i > 0 {
 			buf.WriteString(",")
 		}
-		buf.WriteString("?")
+		buf.WriteString(phFunc())
 	}
 	buf.WriteString(")")
-	fmt.Fprintln(db.lw, "BEGIN")
-	tx, err := db.conn.Begin()
 	fmt.Fprintln(db.lw, buf.String(), args)
-	result, err := tx.Exec(buf.String(), args...)
+	result, err := db.conn.Exec(buf.String(), args...)
 	if err != nil {
-		fmt.Fprintln(db.lw, "ROLLBACK")
-		_ = tx.Rollback()
 		return retPK, err
 	}
-	retPK, err = db.lastInsertPKID(tx, s, result)
+	retPK, err = db.lastInsertPKID(db.conn, s, result)
 	if err != nil {
-		fmt.Fprintln(db.lw, "ROLLBACK")
-		_ = tx.Rollback()
 		return retPK, err
 	}
-	fmt.Fprintln(db.lw, "COMMIT")
-	err = tx.Commit()
 	return retPK, err
 }
 
-func (db *H) lastInsertPKID(tx *sql.Tx, s RowMarshaler, result sql.Result) (Col, error) {
+func (db *H) lastInsertPKID(tx Connection, s RowMarshaler, result sql.Result) (Col, error) {
 	var (
 		buf   bytes.Buffer
 		retPK Col
 	)
+	phFunc := db.placeholder()
 	//first let's make sure this even has a primary key
 	row := s.DBRow()
 	pk := getPKFromColumns(row)
@@ -298,7 +325,8 @@ func (db *H) lastInsertPKID(tx *sql.Tx, s RowMarshaler, result sql.Result) (Col,
 			buf.WriteString(" AND ")
 		}
 		buf.WriteString(v.Name)
-		buf.WriteString("=?")
+		buf.WriteString("=")
+		buf.WriteString(phFunc())
 		args = append(args, v.Val)
 	}
 	buf.WriteString(" ORDER BY ")
@@ -321,6 +349,7 @@ var ErrNotFound = errors.New("Record with given primary key not found.")
 
 //Get a record from SQL using the supplied PrimaryKey
 func (db *H) Get(s RowUnmarshaler) error {
+	phFunc := db.placeholder()
 	row := s.DBRow()
 	pkey := getPKFromColumns(row)
 	if pkey == nil {
@@ -338,7 +367,8 @@ func (db *H) Get(s RowUnmarshaler) error {
 	buf.WriteString(s.DBName())
 	buf.WriteString(" WHERE ")
 	buf.WriteString(pkey.Name)
-	buf.WriteString("=?")
+	buf.WriteString("=")
+	buf.WriteString(phFunc())
 	fmt.Fprintln(db.lw, buf.String(), pkey.Val)
 	dbrow := db.conn.QueryRow(buf.String(), pkey.Val)
 	err := s.DBScan(dbrow)
@@ -350,6 +380,7 @@ func (db *H) Get(s RowUnmarshaler) error {
 
 //Update a record in SQL using the supplied data
 func (db *H) Update(s RowUnmarshaler) error {
+	phFunc := db.placeholder()
 	row := s.DBRow()
 	pkey := getPKFromColumns(row)
 	if pkey == nil {
@@ -368,12 +399,14 @@ func (db *H) Update(s RowUnmarshaler) error {
 			buf.WriteString(",")
 		}
 		buf.WriteString(v.Name)
-		buf.WriteString("=?")
+		buf.WriteString("=")
+		buf.WriteString(phFunc())
 		args = append(args, v.Val)
 	}
 	buf.WriteString(" WHERE ")
 	buf.WriteString(pkey.Name)
-	buf.WriteString("=?")
+	buf.WriteString("=")
+	buf.WriteString(phFunc())
 	args = append(args, pkey.Val)
 	fmt.Fprintln(db.lw, buf.String(), args)
 	res, err := db.conn.Exec(buf.String(), args...)
@@ -547,4 +580,12 @@ type DBScanner interface {
 type RowUnmarshaler interface {
 	RowMarshaler
 	DBScanner
+}
+
+//Connection is and abstraction for either sql.DB or sql.Tx
+//in other words either sql connections or sql transactions will satisfy the interface
+type Connection interface {
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+	Exec(query string, args ...interface{}) (sql.Result, error)
 }

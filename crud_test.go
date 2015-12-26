@@ -43,10 +43,11 @@ func (s *BasicSuite) TearDownSuite(c *C) {
 }
 
 func (s *BasicSuite) Test1Create(c *C) {
-	db := New(s.conn, cWriter{c})
+	db, err := New(s.conn, Logger(cWriter{c}))
+	c.Assert(err, IsNil)
 	cp := &Company{}
 	db.DropTable(cp)
-	err := db.CreateTable(cp)
+	err = db.CreateTable(cp)
 	c.Assert(err, IsNil)
 	//insert a record
 	cp.ID = 1
@@ -74,10 +75,11 @@ func (s *BasicSuite) Test1Create(c *C) {
 }
 
 func (s *BasicSuite) Test2InsertSelect(c *C) {
-	db := New(s.conn, cWriter{c})
+	db, err := New(s.conn, Logger(cWriter{c}))
+	c.Assert(err, IsNil)
 	cp := &Company{}
 	db.DropTable(cp)
-	err := db.CreateTable(cp)
+	err = db.CreateTable(cp)
 	c.Assert(err, IsNil)
 	sample := [][]string{
 		{"Red Hat", "RHT"},
@@ -104,7 +106,8 @@ func (s *BasicSuite) Test3NewDBAndUtility(c *C) {
 	const foo = "foo.db"
 	conn, err := sql.Open("sqlite3", foo)
 	c.Assert(err, IsNil)
-	db := New(conn, nil)
+	db, err := New(conn)
+	c.Assert(err, IsNil)
 	c.Assert(db.conn, Equals, conn)
 	cp := &Company{}
 	err = db.CreateTable(cp)
@@ -116,9 +119,10 @@ func (s *BasicSuite) Test3NewDBAndUtility(c *C) {
 }
 
 func (s *BasicSuite) Test4AnnualReports(c *C) {
-	db := New(s.conn, cWriter{c})
+	db, err := New(s.conn, Logger(cWriter{c}))
+	c.Assert(err, IsNil)
 	cp := Company{ID: 1}
-	err := db.Get(&cp)
+	err = db.Get(&cp)
 	c.Assert(err, IsNil)
 	ar := &AnnualReport{
 		CompanyID: cp.ID,
@@ -174,12 +178,13 @@ func (b BustedResult) RowsAffected() (int64, error) {
 }
 
 func (s *BasicSuite) Test5PersonDemo(c *C) {
-	db := New(s.conn, cWriter{c})
+	db, err := New(s.conn, Logger(cWriter{c}))
+	c.Assert(err, IsNil)
 	p := &Person{
 		FirstName: "John",
 		LastName:  "Doe",
 	}
-	err := db.CreateTable(p)
+	err = db.CreateTable(p)
 	c.Assert(err, IsNil)
 	pk, err := db.Insert(p)
 	c.Assert(err, IsNil)
