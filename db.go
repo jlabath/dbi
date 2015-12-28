@@ -179,11 +179,27 @@ func defaultPlaceHolder() placeHolderFunc {
 	return func() string { return "?" }
 }
 
+func pgPlaceHolder() placeHolderFunc {
+	var count int
+	return func() string {
+		count++
+		return fmt.Sprintf("$%d", count)
+	}
+}
+
+type dbTyp int
+
+const (
+	sqlite dbTyp = iota
+	postgres
+)
+
 //H is our handle supporting Insert/Get/Update to be used by client
 type H struct {
 	conn        Connection
 	lw          io.Writer
 	placeholder func() placeHolderFunc
+	dbType      dbTyp
 }
 
 func newH(conn Connection) *H {
@@ -221,6 +237,14 @@ func Logger(w io.Writer) func(*H) error {
 	return func(db *H) error {
 		return db.setLogger(w)
 	}
+}
+
+//Postgres is an optional configuration option to activate Postgres behavior as expected by lib/pq postgres driver.
+//db, err := New(mySqlConn, Logger(myWriter))
+func Postgres(db *H) error {
+	db.placeholder = pgPlaceHolder
+	db.dbType = postgres
+	return nil
 }
 
 //CreateTable executes CREATE TABLE as per DBRow()
@@ -273,8 +297,13 @@ func (db *H) Insert(s RowMarshaler) (Col, error) {
 		buf.WriteString(phFunc())
 	}
 	buf.WriteString(")")
-	fmt.Fprintln(db.lw, buf.String(), args)
-	result, err := db.conn.Exec(buf.String(), args...)
+	sql := buf.String()
+	if db.dbType == postgres {
+		//postgres inserts should use returning
+		return db.postgresInsert(s, sql, args)
+	}
+	fmt.Fprintln(db.lw, sql, args)
+	result, err := db.conn.Exec(sql, args...)
 	if err != nil {
 		return retPK, err
 	}
@@ -342,6 +371,35 @@ func (db *H) lastInsertPKID(tx Connection, s RowMarshaler, result sql.Result) (C
 	}
 	err = rows.Close()
 	return retPK, err
+}
+
+func (db *H) postgresInsert(s RowMarshaler, sql string, args []interface{}) (Col, error) {
+	plainInsert := false
+	//first let's make sure this even has a primary key
+	row := s.DBRow()
+	pk := getPKFromColumns(row)
+	if pk == nil {
+		plainInsert = true
+	}
+
+	if plainInsert {
+		fmt.Fprintln(db.lw, sql, args)
+		_, err := db.conn.Exec(sql, args...)
+		return Col{}, err
+	}
+
+	//turn into returning query
+	sql = fmt.Sprintf("%s RETURNING %s", sql, pk.Name)
+	fmt.Fprintln(db.lw, sql, args)
+	var liid int64
+	if err := db.conn.QueryRow(sql, args...).Scan(&liid); err != nil {
+		return *pk, err
+	}
+	cnvtLiid, err := forceToTypeOfVal(pk, liid)
+	if err == nil {
+		pk.Val = cnvtLiid
+	}
+	return *pk, err
 }
 
 //ErrNotFound returned when the row with the given primary key was not found
@@ -458,8 +516,9 @@ func (db *H) Select(dst interface{}, where string, args ...interface{}) error {
 	buf.WriteString(s.DBName())
 	buf.WriteString(" ")
 	buf.WriteString(where)
-	fmt.Fprintln(db.lw, buf.String(), args)
-	rows, err := db.conn.Query(buf.String(), args...)
+	query := db.fixQuery(buf.String())
+	fmt.Fprintln(db.lw, query, args)
+	rows, err := db.conn.Query(query, args...)
 	if err != nil {
 		return err
 	}
@@ -478,6 +537,30 @@ func (db *H) Select(dst interface{}, where string, args ...interface{}) error {
 		dstv.Set(reflect.Append(dstv, vToAppend))
 	}
 	return nil
+}
+
+func (db *H) fixQuery(origQuery string) string {
+	const placeHolderRune rune = '?'
+	if db.dbType == sqlite {
+		//all done
+		return origQuery
+	}
+	phf := db.placeholder()
+	var buf bytes.Buffer
+	rbuf := bytes.NewBufferString(origQuery)
+	for {
+		r, _, err := rbuf.ReadRune()
+		if err != nil {
+			break
+		}
+		switch r {
+		case placeHolderRune:
+			buf.WriteString(phf())
+		default:
+			buf.WriteRune(r)
+		}
+	}
+	return buf.String()
 }
 
 //ErrNoPrimaryKey is returned when the model does not have a column marked as PrimaryKey

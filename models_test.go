@@ -6,6 +6,14 @@ import (
 	"math/big"
 )
 
+var pkMeta *ColOpt
+var blobMeta *ColOpt
+
+func init() {
+	pkMeta = &ColOpt{"INTEGER PRIMARY KEY", NoInsert | PrimaryKey}
+	blobMeta = &ColOpt{Type: "BLOB"}
+}
+
 type Company struct {
 	ID     int64  `json:"id"`
 	Name   string `json:"name"`
@@ -18,7 +26,7 @@ func (c *Company) DBName() string {
 
 func (c *Company) DBRow() []Col {
 	return []Col{
-		Col{"ID", c.ID, &ColOpt{"INTEGER PRIMARY KEY", NoInsert | PrimaryKey}},
+		Col{"ID", c.ID, pkMeta},
 		Col{"Name", c.Name, nil},
 		Col{"Ticker", c.Ticker, nil},
 	}
@@ -52,11 +60,11 @@ func (ar *AnnualReport) DBRow() []Col {
 		netIncVal, _ = json.Marshal(ar.NetIncome)
 	}
 	return []Col{
-		Col{"id", ar.ID, &ColOpt{"INTEGER PRIMARY KEY", NoInsert | PrimaryKey}},
+		Col{"id", ar.ID, pkMeta},
 		Col{"company_id", ar.CompanyID, nil},
 		Col{"year", ar.Year, nil},
-		Col{"sales", salesVal, nil},                         //store as varchar(255)
-		Col{"net_income", netIncVal, &ColOpt{Type: "BLOB"}}, //store in DB as []byte
+		Col{"sales", salesVal, nil},            //store as varchar(255)
+		Col{"net_income", netIncVal, blobMeta}, //store in DB as []byte
 	}
 }
 
@@ -95,7 +103,7 @@ func (p *Person) DBName() string {
 //serialize our struct
 func (p *Person) DBRow() []Col {
 	return []Col{
-		Col{"id", p.ID, &ColOpt{"INTEGER PRIMARY KEY", NoInsert | PrimaryKey}},
+		Col{"id", p.ID, pkMeta},
 		Col{"first", p.FirstName, nil},
 		Col{"last", p.LastName, nil},
 	}
