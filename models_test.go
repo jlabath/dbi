@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"math/big"
+	"time"
 )
 
 var pkMeta *ColOpt
@@ -93,6 +94,7 @@ type Person struct {
 	ID        int
 	FirstName string
 	LastName  string
+	TimeStamp time.Time
 }
 
 //define table name

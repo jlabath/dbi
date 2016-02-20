@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	. "gopkg.in/check.v1"
@@ -227,4 +228,38 @@ func (s *BasicSuite) Test5PersonDemo(c *C) {
 	p3.LastName = "Blank"
 	err = db.Update(&p3)
 	c.Assert(err, Equals, ErrNotFound)
+}
+
+func (s *BasicSuite) Test6PersonNewDemo(c *C) {
+	db, err := New(s.conn, Logger(cWriter{c}))
+	c.Assert(err, IsNil)
+	p := &Person{
+		FirstName: "John",
+		LastName:  "Doe",
+	}
+	err = db.DropTable(p)
+	c.Assert(err, IsNil)
+	err = db.CreateTable(p)
+	c.Assert(err, IsNil)
+	pk, err := db.Insert(p)
+	c.Assert(err, IsNil)
+	c.Assert(pk, FitsTypeOf, Col{})
+	up := &Person{ID: pk.Val.(int)}
+	err = db.Get(up)
+	c.Assert(err, IsNil)
+	c.Assert(up.LastName, Equals, "Doe")
+	up.LastName = "Moe"
+	err = db.Update(up)
+	c.Assert(err, IsNil)
+	c.Assert(up.TimeStamp.IsZero(), Equals, true)
+	var results []Person
+	newF := func() RowUnmarshaler {
+		return &Person{
+			TimeStamp: time.Now(),
+		}
+	}
+	err = db.SelectNew(&results, newF, "WHERE last = ? ORDER BY last", "Moe")
+	c.Assert(err, IsNil)
+	c.Assert(results, HasLen, 1)
+	c.Assert(results[0].TimeStamp.IsZero(), Equals, false)
 }

@@ -477,16 +477,23 @@ func (db *H) Update(s RowUnmarshaler) error {
 }
 
 //Select runs an SQL query and populates dst and returns an error if any.
-//It uses the supplied source to call DBRow() to know what columns to ask for.
+//It uses the supplied dst to deduce original type to be able to call DBRow(), DBName() etc.
 //The where is any where/order by/limit type of clause - if empty it will simply do SELECT col1,col2,... FROM table_name
 //args are any params to be used in the SQL query to replace ?
-//It expects dst to be a pointer to a slice of RowUnmarshaler(s).
+//It expects dst to be a pointer to a slice of RowUnmarshaler(s), and it will return an error if it is not.
 func (db *H) Select(dst interface{}, where string, args ...interface{}) error {
+	return db.SelectNew(dst, nil, where, args...)
+}
+
+//SelectNew is functionaly the same as Select however by allowing the user to pass newFunc it is possible to perform
+//additional initializations before the DBName, DBRow, or DBScan are even called.
+func (db *H) SelectNew(dst interface{}, newFunc func() RowUnmarshaler, where string, args ...interface{}) error {
 	var (
 		buf          bytes.Buffer
 		btIsPointer  bool
 		baseBaseType reflect.Type
 	)
+	//first reflect base type from dst
 	baseType, err := reflectBaseType(dst)
 	if err != nil {
 		return err
@@ -498,13 +505,18 @@ func (db *H) Select(dst interface{}, where string, args ...interface{}) error {
 	} else {
 		baseBaseType = baseType
 	}
-	//crt new ptr to baseType
-	newT := reflect.New(baseBaseType)
-	s, isUnmarshaler := newT.Interface().(RowUnmarshaler)
+	//crt new pointer to baseBaseType or call newFunc if not nil
+	var newValue reflect.Value
+	if newFunc == nil {
+		newValue = reflect.New(baseBaseType)
+	} else {
+		newValue = reflect.ValueOf(newFunc())
+	}
+	source, isUnmarshaler := newValue.Interface().(RowUnmarshaler)
 	if !isUnmarshaler {
 		return ErrNoUnmarshaler
 	}
-	row := s.DBRow()
+	row := source.DBRow()
 	buf.WriteString("SELECT ")
 	for i, v := range row {
 		if i > 0 {
@@ -513,7 +525,7 @@ func (db *H) Select(dst interface{}, where string, args ...interface{}) error {
 		buf.WriteString(v.Name)
 	}
 	buf.WriteString(" FROM ")
-	buf.WriteString(s.DBName())
+	buf.WriteString(source.DBName())
 	buf.WriteString(" ")
 	buf.WriteString(where)
 	query := db.fixQuery(buf.String())
@@ -525,12 +537,17 @@ func (db *H) Select(dst interface{}, where string, args ...interface{}) error {
 	defer func() { _ = rows.Close() }()
 	dstv := reflect.ValueOf(dst).Elem()
 	for rows.Next() {
-		r := reflect.New(baseBaseType).Interface().(DBScanner)
-		err = r.DBScan(rows)
+		var rowScn DBScanner
+		if newFunc == nil {
+			rowScn = reflect.New(baseBaseType).Interface().(DBScanner)
+		} else {
+			rowScn = newFunc()
+		}
+		err = rowScn.DBScan(rows)
 		if err != nil {
 			return err
 		}
-		vToAppend := reflect.ValueOf(r)
+		vToAppend := reflect.ValueOf(rowScn)
 		if !btIsPointer {
 			vToAppend = vToAppend.Elem()
 		}
