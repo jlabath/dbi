@@ -586,6 +586,7 @@ var ErrNoPrimaryKey = errors.New("No primary key defined. Use PrimaryKey flag.")
 //Delete deletes a single row from db using the given models PrimaryKey
 func (db *H) Delete(s RowMarshaler) error {
 	row := s.DBRow()
+	phFunc := db.placeholder()
 	pkey := getPKFromColumns(row)
 	if pkey == nil {
 		return ErrNoPrimaryKey
@@ -595,7 +596,8 @@ func (db *H) Delete(s RowMarshaler) error {
 	buf.WriteString(s.DBName())
 	buf.WriteString(" WHERE ")
 	buf.WriteString(pkey.Name)
-	buf.WriteString("=?")
+	buf.WriteString("=")
+	buf.WriteString(phFunc())
 	fmt.Fprintln(db.lw, buf.String(), pkey.Val)
 	_, err := db.conn.Exec(buf.String(), pkey.Val)
 	return err
