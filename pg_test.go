@@ -168,5 +168,24 @@ func (s *PgSuite) Test5PersonDemo(c *C) {
 	}
 	pk, err = db.Insert(p1)
 	c.Assert(err, IsNil)
-	//test pk TODO
+	tx, err := s.conn.Begin()
+	c.Assert(err, IsNil)
+	newpk, err := db.lastInsertPKID(tx, p1, BustedResult{})
+	c.Assert(err, IsNil)
+	c.Assert(newpk.Val.(int), Equals, pk.Val.(int))
+	c.Assert(tx.Commit(), IsNil)
+	p1.ID = newpk.Val.(int)
+	c.Assert(db.Get(p1), IsNil)
+	err = db.Delete(p1)
+	c.Assert(err, IsNil)
+	p2 := Person{ID: p1.ID}
+	err = db.Get(&p2)
+	c.Assert(err, Equals, ErrNotFound)
+	p3 := Person{ID: 243}
+	err = db.Get(&p3)
+	c.Assert(err, Equals, ErrNotFound)
+	p3.FirstName = "Steve"
+	p3.LastName = "Blank"
+	err = db.Update(&p3)
+	c.Assert(err, Equals, ErrNotFound)
 }
