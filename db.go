@@ -637,6 +637,11 @@ type Col struct {
 	Opt  *ColOpt     // options
 }
 
+//NewCol returns a new Col object
+func NewCol(name string, val interface{}, opt *ColOpt) Col {
+	return Col{Name: name, Val: val, Opt: opt}
+}
+
 func (d Col) skipOnInsert() bool {
 	if d.Opt == nil {
 		return false
