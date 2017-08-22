@@ -1,18 +1,17 @@
 language: go
 
 go:
-  - 1.7.x
-  - 1.8.x
-  - tip
+  - 1.7
+  - 1.8
 
 services:
   - postgresql
 
 before_script:
-  - psql -c 'create database travis_ci_test;' -U postgres
+  - psql -c 'create database dbi;' -U postgres
 
 env:
-  - PGDATABASE=travis_ci_test
+  - PGDATABASE=dbi
   - PGUSER=postgres
   - PGHOST="127.0.0.1"
 
