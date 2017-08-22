@@ -81,7 +81,7 @@ func deduceHowToScanVal(col *Col, src Scanner) (interface{}, error) {
 }
 
 //ErrPrimaryKeyOverflow is returned sql.Result.LastInsertId overflows the declared int type
-var ErrPrimaryKeyOverflow = errors.New("Last insert ID returned by database overflows model's type.")
+var ErrPrimaryKeyOverflow = errors.New("Last insert ID returned by database overflows model's type")
 
 func doesIntMatch(someint interface{}, orig int64) bool {
 	switch someint := someint.(type) {
@@ -153,10 +153,13 @@ func forceToTypeOfVal(col *Col, liid int64) (interface{}, error) {
 }
 
 //ErrNoPointerToSlice is returned if dst argument to Select is not a pointer to slice.
-var ErrNoPointerToSlice = errors.New("Expected dst to be a pointer to a slice.")
+var ErrNoPointerToSlice = errors.New("Expected dst to be a pointer to a slice")
 
 //ErrNoUnmarshaler is returned when element of slice dst does not implement RowUnmarshaler
-var ErrNoUnmarshaler = errors.New("Elements of slice dst do not implement RowUnmarshaler.")
+var ErrNoUnmarshaler = errors.New("Elements of slice dst do not implement RowUnmarshaler")
+
+//ErrIsNotSQLConnection is returned when the underlying connection is not sql.DB e.g. when transactions are used
+var ErrIsNotSQLConnection = errors.New("The underlying DB handle is not of type *sql.DB")
 
 func reflectBaseType(s interface{}) (reflect.Type, error) {
 	//need to reflect and make it
@@ -221,6 +224,16 @@ func New(conn Connection, options ...func(*H) error) (*H, error) {
 		}
 	}
 	return h, nil
+}
+
+//DB returns the underlying sql.DB connection handle
+func (db *H) DB() (*sql.DB, error) {
+	switch handle := db.conn.(type) {
+	case *sql.DB:
+		return handle, nil
+	default:
+		return nil, ErrIsNotSQLConnection
+	}
 }
 
 func (db *H) setLogger(w io.Writer) error {
@@ -403,7 +416,7 @@ func (db *H) postgresInsert(s RowMarshaler, sql string, args []interface{}) (Col
 }
 
 //ErrNotFound returned when the row with the given primary key was not found
-var ErrNotFound = errors.New("Record with given primary key not found.")
+var ErrNotFound = errors.New("Record with given primary key not found")
 
 //Get a record from SQL using the supplied PrimaryKey
 func (db *H) Get(s RowUnmarshaler) error {
@@ -581,7 +594,7 @@ func (db *H) fixQuery(origQuery string) string {
 }
 
 //ErrNoPrimaryKey is returned when the model does not have a column marked as PrimaryKey
-var ErrNoPrimaryKey = errors.New("No primary key defined. Use PrimaryKey flag.")
+var ErrNoPrimaryKey = errors.New("No primary key defined. Use PrimaryKey flag")
 
 //Delete deletes a single row from db using the given models PrimaryKey
 func (db *H) Delete(s RowMarshaler) error {

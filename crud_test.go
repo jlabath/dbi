@@ -73,6 +73,10 @@ func (s *BasicSuite) Test1Create(c *C) {
 	c.Assert(c2.ID, Equals, c1.ID)
 	c.Assert(c2.Name, Equals, c1.Name)
 	c.Assert(c2.Ticker, Equals, c1.Ticker)
+	//test DB
+	dbHandle, err := db.DB()
+	c.Assert(err, IsNil)
+	c.Assert(dbHandle, Equals, s.conn)
 }
 
 func (s *BasicSuite) Test2InsertSelect(c *C) {
