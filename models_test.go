@@ -1,6 +1,7 @@
 package dbi
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"math/big"
@@ -81,6 +82,16 @@ func (ar *AnnualReport) DBScan(scanner Scanner) error {
 		ar.Sales = big.NewInt(0)
 		ar.Sales.SetString(salesVal.String, 10)
 	}
+	//trim 00 chars from netIncBuf - sqlite seems to leave this behind sometimes
+	sqliteClean := func(r rune) bool {
+		switch r {
+		case 0x0:
+			return true
+		default:
+			return false
+		}
+	}
+	netIncBuf = bytes.TrimFunc(netIncBuf, sqliteClean)
 	if len(netIncBuf) > 0 {
 		ar.NetIncome = big.NewInt(0)
 		if err := json.Unmarshal(netIncBuf, ar.NetIncome); err != nil {
