@@ -1,6 +1,8 @@
 package dbi
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"math/big"
 	"testing"
@@ -99,7 +101,7 @@ func (s *BasicSuite) Test2InsertSelect(t *testing.T, db *H) {
 		}
 	}
 	var results []*Company
-	err = db.Select(&results, "WHERE Ticker != ? ORDER BY ID", "INTC")
+	err = db.Select(&results, "WHERE Ticker != @ticker ORDER BY ID", sql.Named("ticker", "INTC"))
 	if err != nil {
 		t.Fatalf("Unable to select %s", err)
 	}
@@ -238,7 +240,7 @@ func (s *BasicSuite) Test5PersonDemo(t *testing.T, db *H) {
 	}
 
 	var results []Person
-	err = db.Select(&results, "WHERE last = ? ORDER BY last", "Moe")
+	err = db.Select(&results, "WHERE last = @last ORDER BY last", sql.Named("last", "Moe"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +349,15 @@ func (s *BasicSuite) Test6PersonNewDemo(t *testing.T, db *H) {
 			TimeStamp: time.Now(),
 		}
 	}
-	err = db.SelectNew(&results, newF, "WHERE last = ? ORDER BY last", "Moe")
+	ctx := context.Background()
+	err = db.SelectOption(
+		&results,
+		WithQO(
+			NewFuncQO(newF),
+			WithContextQO(ctx),
+		),
+		"WHERE last = @last ORDER BY last",
+		sql.Named("last", "Moe"))
 	if err != nil {
 		t.Fatal(err)
 	}
