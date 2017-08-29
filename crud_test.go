@@ -25,11 +25,7 @@ func sqliteSetup() (*H, error) {
 }
 
 func sqliteTearDown(db *H) error {
-	conn, err := db.DB()
-	if err != nil {
-		return err
-	}
-	conn.Close()
+	db.DB().Close()
 	os.Remove("basic_suite.db")
 	return nil
 }
@@ -49,11 +45,7 @@ func pqSetup() (*H, error) {
 }
 
 func pqTearDown(db *H) error {
-	conn, err := db.DB()
-	if err != nil {
-		return err
-	}
-	conn.Close()
+	db.DB().Close()
 	return nil
 }
 
@@ -73,11 +65,7 @@ func pgxSetup() (*H, error) {
 }
 
 func pgxTearDown(db *H) error {
-	conn, err := db.DB()
-	if err != nil {
-		return err
-	}
-	conn.Close()
+	db.DB().Close()
 	return nil
 }
 

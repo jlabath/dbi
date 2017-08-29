@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+	"io"
 	"reflect"
 )
 
@@ -26,10 +27,18 @@ func (db *H) SelectOption(dst interface{}, optionFunc QueryOption, where string,
 			return err
 		}
 	}
-	return db.selectQuery(dst, &qc, where, args...)
+	return selectQuery(db.conn, db.placeholder, db.namedArgPrefix, db.lw, dst, &qc, where, args...)
 }
 
-func (db *H) selectQuery(dst interface{}, qc *QueryContext, where string, args ...sql.NamedArg) error {
+func selectQuery(
+	conn connection,
+	placeholderMaker func() placeHolderFunc,
+	namedArgPrefix rune,
+	lw io.Writer,
+	dst interface{},
+	qc *QueryContext,
+	where string,
+	args ...sql.NamedArg) error {
 	var (
 		buf          bytes.Buffer
 		btIsPointer  bool
@@ -74,8 +83,8 @@ func (db *H) selectQuery(dst interface{}, qc *QueryContext, where string, args .
 	query := buf.String()
 	//now translate the query from named format to serial one
 	query, keywords, err := produceQuery(
-		db.namedArgPrefix,
-		db.placeholder(),
+		namedArgPrefix,
+		placeholderMaker(),
 		query)
 	if err != nil {
 		return err
@@ -87,13 +96,13 @@ func (db *H) selectQuery(dst interface{}, qc *QueryContext, where string, args .
 		return err
 	}
 	//log the query to logger
-	fmt.Fprintln(db.lw, query, qargs)
+	fmt.Fprintln(lw, query, qargs)
 	//execute
 	var rows *sql.Rows
 	if qc.context != nil {
-		rows, err = db.conn.QueryContext(qc.context, query, qargs...)
+		rows, err = conn.QueryContext(qc.context, query, qargs...)
 	} else {
-		rows, err = db.conn.Query(query, qargs...)
+		rows, err = conn.Query(query, qargs...)
 	}
 	if err != nil {
 		return err

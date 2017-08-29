@@ -69,10 +69,7 @@ func (s *BasicSuite) Test1Create(t *testing.T, db *H) {
 	}
 
 	//test DB
-	dbHandle, err := db.DB()
-	if err != nil {
-		t.Fatal(err)
-	}
+	dbHandle := db.DB()
 	if dbHandle == nil {
 		t.Fatal("DB() handle should be non nil")
 	}
@@ -258,17 +255,17 @@ func (s *BasicSuite) Test5PersonDemo(t *testing.T, db *H) {
 		t.Fatal(err)
 	}
 
-	conn, err := db.DB()
+	conn := db.DB()
+	if conn == nil {
+		t.Fatal("DB() should not be nil")
+	}
+
+	tx, err := db.Begin()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	tx, err := conn.Begin()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	newpk, err := db.lastInsertPKID(tx, p1, BustedResult{})
+	newpk, err := lastInsertPKID(tx.tx, tx.dbi.placeholder, tx.dbi.lw, p1, BustedResult{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,5 +365,47 @@ func (s *BasicSuite) Test6PersonNewDemo(t *testing.T, db *H) {
 
 	if results[0].TimeStamp.IsZero() {
 		t.Fatal("timestamp should not be Zero")
+	}
+}
+
+func (s *BasicSuite) Test7InsertSelectTransaction(t *testing.T, db *H) {
+	cp := &Company{}
+	db.DropTable(cp)
+	err := db.CreateTable(cp)
+	if err != nil {
+		t.Fatalf("Unable to create table %s", err)
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sample := [][]string{
+		{"Red Hat", "RHT"},
+		{"Intel", "INTC"},
+		{"Google", "GOOG"},
+		{"IBM", "IBM"},
+		{"Oracle Corporation", "ORCL"},
+	}
+	for _, v := range sample {
+		cp.Name = v[0]
+		cp.Ticker = v[1]
+		_, err = tx.Insert(cp)
+		if err != nil {
+			t.Fatalf("Unable to insert %s", err)
+		}
+	}
+	var results []*Company
+	err = tx.Select(&results, "WHERE Ticker != @ticker ORDER BY ID", sql.Named("ticker", "INTC"))
+	if err != nil {
+		t.Fatalf("Unable to select %s", err)
+	}
+	for _, v := range results {
+		if v.Ticker == "INTC" {
+			t.Fatalf("Expected INTC must be missing from results")
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		t.Error(err)
 	}
 }

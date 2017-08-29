@@ -159,9 +159,6 @@ var ErrNoPointerToSlice = errors.New("Expected dst to be a pointer to a slice")
 //ErrNoUnmarshaler is returned when element of slice dst does not implement RowUnmarshaler
 var ErrNoUnmarshaler = errors.New("Elements of slice dst do not implement RowUnmarshaler")
 
-//ErrIsNotSQLConnection is returned when the underlying connection is not sql.DB e.g. when transactions are used
-var ErrIsNotSQLConnection = errors.New("The underlying DB handle is not of type *sql.DB")
-
 func reflectBaseType(s interface{}) (reflect.Type, error) {
 	//need to reflect and make it
 	typ := reflect.TypeOf(s)
@@ -201,14 +198,14 @@ const (
 
 //H is our handle supporting Insert/Get/Update to be used by client
 type H struct {
-	conn           Connection
+	conn           *sql.DB
 	lw             io.Writer
 	placeholder    func() placeHolderFunc
 	dbType         dbTyp
 	namedArgPrefix rune
 }
 
-func newH(conn Connection) *H {
+func newH(conn *sql.DB) *H {
 	return &H{
 		conn:           conn,
 		lw:             ioutil.Discard,
@@ -218,7 +215,7 @@ func newH(conn Connection) *H {
 }
 
 //New return a new DB handle
-func New(conn Connection, options ...func(*H) error) (*H, error) {
+func New(conn *sql.DB, options ...func(*H) error) (*H, error) {
 	h := newH(conn)
 	for _, opt := range options {
 		if opt == nil {
@@ -232,13 +229,8 @@ func New(conn Connection, options ...func(*H) error) (*H, error) {
 }
 
 //DB returns the underlying sql.DB connection handle
-func (db *H) DB() (*sql.DB, error) {
-	switch handle := db.conn.(type) {
-	case *sql.DB:
-		return handle, nil
-	default:
-		return nil, ErrIsNotSQLConnection
-	}
+func (db *H) DB() *sql.DB {
+	return db.conn
 }
 
 func (db *H) setLogger(w io.Writer) error {
@@ -283,141 +275,6 @@ func (db *H) CreateTable(source RowMarshaler) error {
 	_, err := db.conn.Exec(buf.String())
 	fmt.Fprintln(db.lw, buf.String())
 	return err
-}
-
-//Insert a record into sql and return a Col with the primary key and any error
-func (db *H) Insert(s RowMarshaler) (Col, error) {
-	var (
-		buf   bytes.Buffer
-		retPK Col
-	)
-	phFunc := db.placeholder()
-	buf.WriteString("INSERT INTO ")
-	buf.WriteString(s.DBName())
-	buf.WriteString("(")
-	row := s.DBRow()
-	args := make([]interface{}, 0, len(row))
-	for _, v := range row {
-		if v.skipOnInsert() {
-			continue
-		}
-		if len(args) > 0 {
-			buf.WriteString(",")
-		}
-		buf.WriteString(v.Name)
-		args = append(args, v.Val)
-	}
-	buf.WriteString(")  VALUES (")
-	for i := 0; i < len(args); i++ {
-		if i > 0 {
-			buf.WriteString(",")
-		}
-		buf.WriteString(phFunc())
-	}
-	buf.WriteString(")")
-	sql := buf.String()
-	if db.dbType == postgres {
-		//postgres inserts should use returning
-		return db.postgresInsert(s, sql, args)
-	}
-	fmt.Fprintln(db.lw, sql, args)
-	result, err := db.conn.Exec(sql, args...)
-	if err != nil {
-		return retPK, err
-	}
-	retPK, err = db.lastInsertPKID(db.conn, s, result)
-	if err != nil {
-		return retPK, err
-	}
-	return retPK, err
-}
-
-func (db *H) lastInsertPKID(tx Connection, s RowMarshaler, result sql.Result) (Col, error) {
-	var (
-		buf   bytes.Buffer
-		retPK Col
-	)
-	phFunc := db.placeholder()
-	//first let's make sure this even has a primary key
-	row := s.DBRow()
-	pk := getPKFromColumns(row)
-	if pk == nil {
-		return retPK, nil
-	}
-	//just return pk if not autoincrement
-	if !pk.skipOnInsert() {
-		return *pk, nil
-	}
-	retPK.Name = pk.Name
-	//ok check if we can get it from result if driver implements this
-	if liid, err := result.LastInsertId(); err == nil {
-		cnvtLiid, err := forceToTypeOfVal(pk, liid)
-		if err == nil {
-			retPK.Val = cnvtLiid
-			return retPK, nil
-		}
-		return retPK, err
-	}
-	buf.WriteString("SELECT ")
-	buf.WriteString(pk.Name)
-	buf.WriteString(" FROM ")
-	buf.WriteString(s.DBName())
-	buf.WriteString(" WHERE ")
-	args := make([]interface{}, 0, len(row))
-	for _, v := range row {
-		if v.isPrimaryKey() || v.skipOnInsert() || v.isBinaryBlob() {
-			continue
-		}
-		if len(args) > 0 {
-			buf.WriteString(" AND ")
-		}
-		buf.WriteString(v.Name)
-		buf.WriteString("=")
-		buf.WriteString(phFunc())
-		args = append(args, v.Val)
-	}
-	buf.WriteString(" ORDER BY ")
-	buf.WriteString(pk.Name)
-	buf.WriteString(" DESC ") //presumably order by highest first
-	fmt.Fprintln(db.lw, buf.String(), args)
-	rows, err := tx.Query(buf.String(), args...)
-	if err != nil {
-		return retPK, err
-	}
-	if rows.Next() {
-		retPK.Val, err = deduceHowToScanVal(pk, rows)
-	}
-	err = rows.Close()
-	return retPK, err
-}
-
-func (db *H) postgresInsert(s RowMarshaler, sql string, args []interface{}) (Col, error) {
-	plainInsert := false
-	//first let's make sure this even has a primary key
-	row := s.DBRow()
-	pk := getPKFromColumns(row)
-	if pk == nil {
-		plainInsert = true
-	}
-
-	if plainInsert {
-		fmt.Fprintln(db.lw, sql, args)
-		_, err := db.conn.Exec(sql, args...)
-		return Col{}, err
-	}
-
-	//turn into returning query
-	sql = fmt.Sprintf("%s RETURNING %s", sql, pk.Name)
-	fmt.Fprintln(db.lw, sql, args)
-	var liid int64
-	if err := db.conn.QueryRow(sql, args...).Scan(&liid); err != nil {
-		return *pk, err
-	}
-	cnvtLiid, err := forceToTypeOfVal(pk, liid)
-	if err == nil {
-		pk.Val = cnvtLiid
-	}
-	return *pk, err
 }
 
 //ErrNotFound returned when the row with the given primary key was not found
@@ -603,9 +460,9 @@ type RowUnmarshaler interface {
 	DBScanner
 }
 
-//Connection is and abstraction for either sql.DB or sql.Tx
+//connection is and abstraction for either sql.DB or sql.Tx
 //in other words either sql connections or sql transactions will satisfy the interface
-type Connection interface {
+type connection interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
