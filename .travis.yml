@@ -2,6 +2,7 @@ language: go
 
 go:
   - 1.8
+  - 1.9
 
 services:
   - postgresql
@@ -18,6 +19,7 @@ env:
 install:
   - go get github.com/lib/pq
   - go get github.com/mattn/go-sqlite3
+  - go get github.com/jackc/pgx
 
 script:
   - go test -v -race -timeout 20s

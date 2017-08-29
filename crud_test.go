@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	_ "github.com/jackc/pgx/stdlib"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -56,6 +57,30 @@ func pqTearDown(db *H) error {
 	return nil
 }
 
+//postgres pgx
+func pgxSetup() (*H, error) {
+	conn, err := sql.Open(
+		"pgx",
+		os.ExpandEnv("user=$PGUSER host=$PGHOST database=$PGDATABASE sslmode=disable"))
+	if err != nil {
+		return nil, err
+	}
+
+	//overwrite pkMeta from models_test.go
+	pkMeta = &ColOpt{"SERIAL PRIMARY KEY", NoInsert | PrimaryKey}
+	blobMeta = &ColOpt{Type: "bytea"}
+	return New(conn, Postgres)
+}
+
+func pgxTearDown(db *H) error {
+	conn, err := db.DB()
+	if err != nil {
+		return err
+	}
+	conn.Close()
+	return nil
+}
+
 type TestSuite interface {
 	Name() string
 }
@@ -69,6 +94,7 @@ func TestDBI(t *testing.T) {
 	}{
 		{"sqlite", sqliteSetup, sqliteTearDown, []TestSuite{&BasicSuite{}}},
 		{"pq[postgres]", pqSetup, pqTearDown, []TestSuite{&BasicSuite{}}},
+		{"pgx[postgres]", pgxSetup, pgxTearDown, []TestSuite{&BasicSuite{}}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -76,7 +102,7 @@ func TestDBI(t *testing.T) {
 				t.Run(suite.Name(), func(t *testing.T) {
 					db, err := test.setup()
 					if err != nil {
-						t.Error(err)
+						t.Fatal(err)
 					}
 					//run suite
 					runSuite(t, db, suite)
