@@ -233,30 +233,6 @@ func (db *H) DB() *sql.DB {
 	return db.conn
 }
 
-func (db *H) setLogger(w io.Writer) error {
-	if w == nil {
-		return errors.New("logger writer is nil")
-	}
-	db.lw = w
-	return nil
-}
-
-//Logger is an optional configuration option if logging of SQL statements by dbi is desired
-//db, err := New(mySqlConn, Logger(myWriter))
-func Logger(w io.Writer) func(*H) error {
-	return func(db *H) error {
-		return db.setLogger(w)
-	}
-}
-
-//Postgres is an optional configuration option to activate Postgres behavior as expected by lib/pq postgres driver.
-//db, err := New(mySqlConn, Logger(myWriter))
-func Postgres(db *H) error {
-	db.placeholder = pgPlaceHolder
-	db.dbType = postgres
-	return nil
-}
-
 //CreateTable executes CREATE TABLE as per DBRow()
 func (db *H) CreateTable(source RowMarshaler) error {
 	var buf bytes.Buffer
@@ -277,103 +253,6 @@ func (db *H) CreateTable(source RowMarshaler) error {
 	return err
 }
 
-//ErrNotFound returned when the row with the given primary key was not found
-var ErrNotFound = errors.New("Record with given primary key not found")
-
-//Get a record from SQL using the supplied PrimaryKey
-func (db *H) Get(s RowUnmarshaler) error {
-	phFunc := db.placeholder()
-	row := s.DBRow()
-	pkey := getPKFromColumns(row)
-	if pkey == nil {
-		return ErrNoPrimaryKey
-	}
-	var buf bytes.Buffer
-	buf.WriteString("SELECT ")
-	for i, v := range row {
-		if i > 0 {
-			buf.WriteString(",")
-		}
-		buf.WriteString(v.Name)
-	}
-	buf.WriteString(" FROM ")
-	buf.WriteString(s.DBName())
-	buf.WriteString(" WHERE ")
-	buf.WriteString(pkey.Name)
-	buf.WriteString("=")
-	buf.WriteString(phFunc())
-	fmt.Fprintln(db.lw, buf.String(), pkey.Val)
-	dbrow := db.conn.QueryRow(buf.String(), pkey.Val)
-	err := s.DBScan(dbrow)
-	if err == sql.ErrNoRows {
-		return ErrNotFound
-	}
-	return err
-}
-
-//Update a record in SQL using the supplied data
-func (db *H) Update(s RowUnmarshaler) error {
-	phFunc := db.placeholder()
-	row := s.DBRow()
-	pkey := getPKFromColumns(row)
-	if pkey == nil {
-		return ErrNoPrimaryKey
-	}
-	args := make([]interface{}, 0, len(row))
-	var buf bytes.Buffer
-	buf.WriteString("UPDATE ")
-	buf.WriteString(s.DBName())
-	buf.WriteString(" SET ")
-	for _, v := range row {
-		if v.isPrimaryKey() {
-			continue
-		}
-		if len(args) > 0 {
-			buf.WriteString(",")
-		}
-		buf.WriteString(v.Name)
-		buf.WriteString("=")
-		buf.WriteString(phFunc())
-		args = append(args, v.Val)
-	}
-	buf.WriteString(" WHERE ")
-	buf.WriteString(pkey.Name)
-	buf.WriteString("=")
-	buf.WriteString(phFunc())
-	args = append(args, pkey.Val)
-	fmt.Fprintln(db.lw, buf.String(), args)
-	res, err := db.conn.Exec(buf.String(), args...)
-	if err == nil {
-		if n, err := res.RowsAffected(); err == nil && n == 0 {
-			return ErrNotFound
-		}
-	}
-	return err
-}
-
-//ErrNoPrimaryKey is returned when the model does not have a column marked as PrimaryKey
-var ErrNoPrimaryKey = errors.New("No primary key defined. Use PrimaryKey flag")
-
-//Delete deletes a single row from db using the given models PrimaryKey
-func (db *H) Delete(s RowMarshaler) error {
-	row := s.DBRow()
-	phFunc := db.placeholder()
-	pkey := getPKFromColumns(row)
-	if pkey == nil {
-		return ErrNoPrimaryKey
-	}
-	var buf bytes.Buffer
-	buf.WriteString("DELETE FROM ")
-	buf.WriteString(s.DBName())
-	buf.WriteString(" WHERE ")
-	buf.WriteString(pkey.Name)
-	buf.WriteString("=")
-	buf.WriteString(phFunc())
-	fmt.Fprintln(db.lw, buf.String(), pkey.Val)
-	_, err := db.conn.Exec(buf.String(), pkey.Val)
-	return err
-}
-
 //DropTable executes DROP TABLE
 func (db *H) DropTable(source DBNamer) error {
 	var buf bytes.Buffer
@@ -384,12 +263,17 @@ func (db *H) DropTable(source DBNamer) error {
 	return err
 }
 
-//Flag for storing meta information about parent Col
-type Flag uint16
+//Named is just a convenience method to avoid the need to import database/sql
+func (db *H) Named(n string, v interface{}) sql.NamedArg {
+	return sql.Named(n, v)
+}
+
+//ColOptFlag for storing meta information about parent Col
+type ColOptFlag uint16
 
 const (
 	//NoInsert means do not include this column on inserts
-	NoInsert Flag = 1 << (16 - 1 - iota)
+	NoInsert ColOptFlag = 1 << (16 - 1 - iota)
 	//PrimaryKey marks this column as primary key
 	PrimaryKey
 )
@@ -397,8 +281,8 @@ const (
 //ColOpt is struct for optional meta information
 //e.g. to mark Field as PrimaryKey or to use custom type for TableCreate
 type ColOpt struct {
-	Type  string // type to use when CREATE TABLE is called e.g. text, blob
-	Flags Flag   // meta information about the column such as PrimaryKey
+	Type  string     // type to use when CREATE TABLE is called e.g. text, blob
+	Flags ColOptFlag // meta information about the column such as PrimaryKey
 }
 
 //Col is our basic structure consisting of Name,Val pair and optional Type and Flags attributes

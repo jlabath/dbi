@@ -2,38 +2,39 @@ package dbi
 
 import "context"
 
-//QueryContext for advanced settings during query execution
-//this will be modified via the QueryOption functions
-type QueryContext struct {
+//StmtContext for advanced settings during query execution
+//this will be modified via the StmtOption functions
+type StmtContext struct {
 	newFunc func() RowUnmarshaler
 	context context.Context
 }
 
-//QueryOption is configuration function to configure QueryContext before executing the query
-type QueryOption func(qc *QueryContext) error
+//StmtOption is configuration function to configure QueryContext before executing the query
+type StmtOption func(qc *StmtContext) error
 
-//NewFuncQO returns a QueryOption that will modify the QueryContext with
+//WithNewFunc returns a QueryOption that will modify the QueryContext with
 //function that will be called to initialize the target type before
 //the result from DB is scanned
-func NewFuncQO(newFunc func() RowUnmarshaler) QueryOption {
-	return func(qc *QueryContext) error {
+func WithNewFunc(newFunc func() RowUnmarshaler) StmtOption {
+	return func(qc *StmtContext) error {
 		qc.newFunc = newFunc
 		return nil
 	}
 }
 
-//WithContextQO is configuration function to configure QueryContext with provided context
+//WithContext is configuration function to configure QueryContext with provided context
 //which then gives caller the ability to cancel and timeout queries
-func WithContextQO(ctx context.Context) QueryOption {
-	return func(qc *QueryContext) error {
+func WithContext(ctx context.Context) StmtOption {
+	return func(qc *StmtContext) error {
 		qc.context = ctx
 		return nil
 	}
 }
 
-//WithQO combines several options into one
-func WithQO(opts ...QueryOption) QueryOption {
-	return func(qc *QueryContext) error {
+//Compose combines several options into one
+//e.g. Compose(WithContext(ctx), WithNewFunc(myInitFunc))
+func Compose(opts ...StmtOption) StmtOption {
+	return func(qc *StmtContext) error {
 		for _, opt := range opts {
 			err := opt(qc)
 			if err != nil {

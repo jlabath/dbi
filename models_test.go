@@ -28,9 +28,9 @@ func (c *Company) DBName() string {
 
 func (c *Company) DBRow() []Col {
 	return []Col{
-		Col{"ID", c.ID, pkMeta},
-		Col{"Name", c.Name, nil},
-		Col{"Ticker", c.Ticker, nil},
+		NewCol("ID", c.ID, pkMeta),
+		NewCol("Name", c.Name, nil),
+		NewCol("Ticker", c.Ticker, nil),
 	}
 }
 

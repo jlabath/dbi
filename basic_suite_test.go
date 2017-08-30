@@ -349,9 +349,9 @@ func (s *BasicSuite) Test6PersonNewDemo(t *testing.T, db *H) {
 	ctx := context.Background()
 	err = db.SelectOption(
 		&results,
-		WithQO(
-			NewFuncQO(newF),
-			WithContextQO(ctx),
+		Compose(
+			WithNewFunc(newF),
+			WithContext(ctx),
 		),
 		"WHERE last = @last ORDER BY last",
 		sql.Named("last", "Moe"))
@@ -395,7 +395,7 @@ func (s *BasicSuite) Test7InsertSelectTransaction(t *testing.T, db *H) {
 		}
 	}
 	var results []*Company
-	err = tx.Select(&results, "WHERE Ticker != @ticker ORDER BY ID", sql.Named("ticker", "INTC"))
+	err = tx.Select(&results, "WHERE Ticker != @ticker ORDER BY ID", db.Named("ticker", "INTC"))
 	if err != nil {
 		t.Fatalf("Unable to select %s", err)
 	}
@@ -408,4 +408,134 @@ func (s *BasicSuite) Test7InsertSelectTransaction(t *testing.T, db *H) {
 	if err != nil {
 		t.Error(err)
 	}
+	dbFromTx := tx.DBI()
+	if db != dbFromTx {
+		t.Error("DBI for transaction does not equal original DBI")
+	}
+}
+
+func (s *BasicSuite) Test8PersonDemoInTransaction(t *testing.T, db *H) {
+
+	p := &Person{
+		FirstName: "John",
+		LastName:  "Doe",
+	}
+	db.DropTable(p)
+	err := db.CreateTable(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pk, err := tx.Insert(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	up := &Person{ID: pk.Val.(int)}
+	err = tx.Get(up)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if up.LastName != "Doe" {
+		t.Fatal("LastName mismatch")
+	}
+
+	up.LastName = "Moe"
+	err = tx.Update(up)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var results []Person
+	err = tx.Select(&results, "WHERE last = @last ORDER BY last", sql.Named("last", "Moe"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatal("results should have 1 result")
+	}
+
+	//test driver that does not support sql.Result
+	p1 := &Person{
+		FirstName: "A.T.",
+		LastName:  "Tappman",
+	}
+	pk, err = tx.Insert(p1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conn := tx.DBI().DB()
+	if conn == nil {
+		t.Fatal("DB() should not be nil")
+	}
+
+	p1.ID = pk.Val.(int)
+	err = tx.Get(p1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = tx.Delete(p1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p2 := Person{ID: p1.ID}
+	err = tx.Get(&p2)
+	if err != ErrNotFound {
+		t.Fatalf("want %v got %v", ErrNotFound, err)
+	}
+	p3 := Person{ID: 243}
+	err = tx.Get(&p3)
+
+	if err != ErrNotFound {
+		t.Fatalf("want %v got %v", ErrNotFound, err)
+	}
+
+	p3.FirstName = "Steve"
+	p3.LastName = "Blank"
+	err = tx.Update(&p3)
+	if err != ErrNotFound {
+		t.Fatalf("want %v got %v", ErrNotFound, err)
+	}
+	err = tx.Commit()
+	if err != nil {
+		t.Error(err)
+	}
+
+	//test rollback
+	p4 := &Person{
+		FirstName: "John",
+		LastName:  "Milton",
+	}
+	tx, err = db.Begin()
+	if err != nil {
+		t.Error(err)
+	}
+	pk, err = tx.Insert(p4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p5 := &Person{ID: pk.Val.(int)}
+	err = tx.Get(p5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p5.LastName != "Milton" {
+		t.Fatal("LastName mismatch")
+	}
+	err = tx.Rollback()
+	if err != nil {
+		t.Error(err)
+	}
+	err = db.Get(p5)
+	if err == nil {
+		t.Error("Expected error when retrieving rolled back data")
+	}
+
 }

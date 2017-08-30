@@ -20,8 +20,12 @@ func (db *H) Select(dst interface{}, where string, args ...sql.NamedArg) error {
 //SelectOption is functionaly the same as Select however by allowing the user to pass options it is possible to perform
 //additional initializations before the DBName, DBRow, or DBScan are even called.
 //it's also possible to provide context to allow cancellable queries introduced in go 1.8
-func (db *H) SelectOption(dst interface{}, optionFunc QueryOption, where string, args ...sql.NamedArg) error {
-	qc := QueryContext{}
+func (db *H) SelectOption(
+	dst interface{},
+	optionFunc StmtOption,
+	where string,
+	args ...sql.NamedArg) error {
+	qc := StmtContext{}
 	if optionFunc != nil {
 		if err := optionFunc(&qc); err != nil {
 			return err
@@ -36,7 +40,7 @@ func selectQuery(
 	namedArgPrefix rune,
 	lw io.Writer,
 	dst interface{},
-	qc *QueryContext,
+	qc *StmtContext,
 	where string,
 	args ...sql.NamedArg) error {
 	var (

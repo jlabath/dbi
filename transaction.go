@@ -34,10 +34,16 @@ func newTx(db *H, tx *sql.Tx) (*Tx, error) {
 	}, nil
 }
 
-//Commit commits a transaction and marks it as completed and unusable
+//Commit commits this transaction
 func (tx *Tx) Commit() error {
 	fmt.Fprintf(tx.dbi.lw, "COMMIT\n")
 	return tx.tx.Commit()
+}
+
+//Rollback aborts this transaction
+func (tx *Tx) Rollback() error {
+	fmt.Fprintf(tx.dbi.lw, "ROLLBACK\n")
+	return tx.tx.Rollback()
 }
 
 //Insert a record into sql and return a Col with the primary key and any error
@@ -59,9 +65,9 @@ func (tx *Tx) Select(dst interface{}, where string, args ...sql.NamedArg) error 
 //it's also possible to provide context to allow cancellable queries introduced in go 1.8
 func (tx *Tx) SelectOption(
 	dst interface{},
-	optionFunc QueryOption,
+	optionFunc StmtOption,
 	where string, args ...sql.NamedArg) error {
-	qc := QueryContext{}
+	qc := StmtContext{}
 	if optionFunc != nil {
 		if err := optionFunc(&qc); err != nil {
 			return err
@@ -76,4 +82,24 @@ func (tx *Tx) SelectOption(
 		&qc,
 		where,
 		args...)
+}
+
+//DBI returns the originating DBI handle for this transaction
+func (tx *Tx) DBI() *H {
+	return tx.dbi
+}
+
+//Get a record from SQL using the supplied PrimaryKey
+func (tx *Tx) Get(s RowUnmarshaler) error {
+	return get(tx.tx, tx.dbi.placeholder, tx.dbi.lw, s)
+}
+
+//Update a record in SQL using the supplied data
+func (tx *Tx) Update(s RowUnmarshaler) error {
+	return update(tx.tx, tx.dbi.placeholder, tx.dbi.lw, s)
+}
+
+//Delete deletes a single row from db using the given models PrimaryKey
+func (tx *Tx) Delete(s RowMarshaler) error {
+	return delete(tx.tx, tx.dbi.placeholder, tx.dbi.lw, s)
 }

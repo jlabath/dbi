@@ -41,7 +41,7 @@ func pqSetup() (*H, error) {
 	//overwrite pkMeta from models_test.go
 	pkMeta = &ColOpt{"SERIAL PRIMARY KEY", NoInsert | PrimaryKey}
 	blobMeta = &ColOpt{Type: "bytea"}
-	return New(conn, Postgres)
+	return New(conn, Postgres())
 }
 
 func pqTearDown(db *H) error {
@@ -61,7 +61,7 @@ func pgxSetup() (*H, error) {
 	//overwrite pkMeta from models_test.go
 	pkMeta = &ColOpt{"SERIAL PRIMARY KEY", NoInsert | PrimaryKey}
 	blobMeta = &ColOpt{Type: "bytea"}
-	return New(conn, Postgres)
+	return New(conn, Postgres())
 }
 
 func pgxTearDown(db *H) error {

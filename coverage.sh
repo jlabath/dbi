@@ -1,6 +1,6 @@
 #/bin/sh
 rm coverage.prof
-go test -coverprofile=coverage.prof -race -v -timeout 20s
+go test -coverprofile=coverage.prof -race -v -timeout 30s
 if [ $? -ne 0 ]; then
     exit $?
 fi
