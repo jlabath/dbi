@@ -6,20 +6,24 @@ go:
 
 services:
   - postgresql
+  - mysql
 
 before_script:
   - psql -c 'create database dbi;' -U postgres postgres
+  - mysql -u root -e 'CREATE DATABASE dbi;'
 
 env:
   global:
     - PGDATABASE=dbi
     - PGUSER=postgres
     - PGHOST="127.0.0.1"
+    - MYSQLUSER=root
 
 install:
   - go get github.com/lib/pq
   - go get github.com/mattn/go-sqlite3
   - go get github.com/jackc/pgx
+  - go get github.com/go-sql-driver/mysql
 
 script:
-  - go test -v -race -timeout 20s
+  - go test -v -race -timeout 30s

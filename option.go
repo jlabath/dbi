@@ -25,11 +25,21 @@ func Logger(w io.Writer) DBOption {
 }
 
 //Postgres is an optional configuration option to activate Postgres behavior as expected by lib/pq or pgx postgres drivers
-//db, err := New(mySqlConn, Logger(myWriter))
+//db, err := New(mySqlConn, Postgres(), Logger(myWriter))
 func Postgres() DBOption {
 	return func(db *H) error {
 		db.placeholder = pgPlaceHolder
 		db.dbType = postgres
+		return nil
+	}
+}
+
+//Mysql is an optional configuration option to activate MySQL behavior
+//db, err := New(mySqlConn, Mysql(), Logger(myWriter))
+func Mysql() DBOption {
+	return func(db *H) error {
+		db.placeholder = defaultPlaceHolder
+		db.dbType = mysql
 		return nil
 	}
 }

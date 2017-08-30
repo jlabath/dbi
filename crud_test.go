@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/stdlib"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
@@ -69,6 +70,26 @@ func pgxTearDown(db *H) error {
 	return nil
 }
 
+//go-sql mysql
+func gosqlSetup() (*H, error) {
+	conn, err := sql.Open(
+		"mysql",
+		os.ExpandEnv("$MYSQLUSER@tcp($PGHOST:3306)/$PGDATABASE"))
+	if err != nil {
+		return nil, err
+	}
+
+	//overwrite pkMeta from models_test.go
+	pkMeta = &ColOpt{"SERIAL PRIMARY KEY", NoInsert | PrimaryKey}
+	blobMeta = &ColOpt{Type: "BLOB"}
+	return New(conn, Mysql())
+}
+
+func gosqlTearDown(db *H) error {
+	db.DB().Close()
+	return nil
+}
+
 type TestSuite interface {
 	Name() string
 }
@@ -83,6 +104,7 @@ func TestDBI(t *testing.T) {
 		{"sqlite", sqliteSetup, sqliteTearDown, []TestSuite{&BasicSuite{}}},
 		{"pq[postgres]", pqSetup, pqTearDown, []TestSuite{&BasicSuite{}}},
 		{"pgx[postgres]", pgxSetup, pgxTearDown, []TestSuite{&BasicSuite{}}},
+		{"go-sql-driver[mysql]", gosqlSetup, gosqlTearDown, []TestSuite{&BasicSuite{}}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

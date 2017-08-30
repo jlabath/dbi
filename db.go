@@ -194,6 +194,7 @@ type dbTyp int
 const (
 	sqlite dbTyp = iota
 	postgres
+	mysql
 )
 
 //H is our handle supporting Insert/Get/Update to be used by client
