@@ -47,7 +47,7 @@ func (tx *Tx) Rollback() error {
 }
 
 //Insert a record into sql and return a Col with the primary key and any error
-func (tx *Tx) Insert(s RowMarshaler) (Col, error) {
+func (tx *Tx) Insert(s DBRowMarshaler) (Col, error) {
 	return insert(tx.tx, tx.dbi.dbType, tx.dbi.placeholder, tx.dbi.lw, s)
 }
 
@@ -90,16 +90,16 @@ func (tx *Tx) DBI() *H {
 }
 
 //Get a record from SQL using the supplied PrimaryKey
-func (tx *Tx) Get(s RowUnmarshaler) error {
+func (tx *Tx) Get(s DBRowUnmarshaler) error {
 	return get(tx.tx, tx.dbi.placeholder, tx.dbi.lw, s)
 }
 
 //Update a record in SQL using the supplied data
-func (tx *Tx) Update(s RowUnmarshaler) error {
+func (tx *Tx) Update(s DBRowUnmarshaler) error {
 	return update(tx.tx, tx.dbi.placeholder, tx.dbi.lw, s)
 }
 
 //Delete deletes a single row from db using the given models PrimaryKey
-func (tx *Tx) Delete(s RowMarshaler) error {
+func (tx *Tx) Delete(s DBRowMarshaler) error {
 	return delete(tx.tx, tx.dbi.placeholder, tx.dbi.lw, s)
 }

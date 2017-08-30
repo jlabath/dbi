@@ -67,7 +67,7 @@ func selectQuery(
 	} else {
 		newValue = reflect.ValueOf(qc.newFunc())
 	}
-	source, isUnmarshaler := newValue.Interface().(RowUnmarshaler)
+	source, isUnmarshaler := newValue.Interface().(DBRowUnmarshaler)
 	if !isUnmarshaler {
 		return ErrNoUnmarshaler
 	}

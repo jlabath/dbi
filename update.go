@@ -7,11 +7,11 @@ import (
 )
 
 //Update a record in SQL using the supplied data
-func (db *H) Update(s RowUnmarshaler) error {
+func (db *H) Update(s DBRowUnmarshaler) error {
 	return update(db.DB(), db.placeholder, db.lw, s)
 }
 
-func update(conn connection, phMaker func() placeHolderFunc, lw io.Writer, s RowUnmarshaler) error {
+func update(conn connection, phMaker func() placeHolderFunc, lw io.Writer, s DBRowUnmarshaler) error {
 	phFunc := phMaker()
 	row := s.DBRow()
 	pkey := getPKFromColumns(row)

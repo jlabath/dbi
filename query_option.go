@@ -5,7 +5,7 @@ import "context"
 //StmtContext for advanced settings during query execution
 //this will be modified via the StmtOption functions
 type StmtContext struct {
-	newFunc func() RowUnmarshaler
+	newFunc func() DBRowUnmarshaler
 	context context.Context
 }
 
@@ -15,7 +15,7 @@ type StmtOption func(qc *StmtContext) error
 //WithNewFunc returns a QueryOption that will modify the QueryContext with
 //function that will be called to initialize the target type before
 //the result from DB is scanned
-func WithNewFunc(newFunc func() RowUnmarshaler) StmtOption {
+func WithNewFunc(newFunc func() DBRowUnmarshaler) StmtOption {
 	return func(qc *StmtContext) error {
 		qc.newFunc = newFunc
 		return nil

@@ -19,7 +19,7 @@ Dislikes:
 
 DBI gives maximum control to the user to define how models are stored and retreived from DB, and how the table schema looks like.
 
-This is a work in progress.
+At present Support for Postgres, MySQL and Sqlite.
 
 Define your models and implement required methods to satisfy RowMarshaler/RowUnmarshaller
 
@@ -38,9 +38,9 @@ func (p *Person) DBName() string {
 //serialize our struct
 func (p *Person) DBRow() []dbi.Col {
 	return []dbi.Col{
-		dbi.Col{"id", p.ID, &dbi.ColOpt{"SERIAL PRIMARY KEY", dbi.NoInsert | dbi.PrimaryKey}},
-		dbi.Col{"first", p.FirstName, nil},
-		dbi.Col{"last", p.LastName, nil},
+		dbi.NewCol("id", p.ID, &dbi.ColOpt{"SERIAL PRIMARY KEY", dbi.NoInsert | dbi.PrimaryKey}),
+		dbi.NewCol("first", p.FirstName, nil),
+		dbi.NewCol("last", p.LastName, nil),
 	}
 }
 
@@ -54,7 +54,7 @@ Usage then looks like this
 
 ```golang
 
-db, err := dbi.New(sqlConn)
+db, err := dbi.New(sqlConn, Postgres())
 p := &Person{
 	FirstName: "John",
 	LastName:  "Doe",
@@ -76,5 +76,5 @@ err = db.Update(up)
 
 //query
 var persons []Person
-err := db.Select(&persons, "WHERE last = ? ORDER BY last", "Moe")
+err := db.Select(&persons, "WHERE last = @last ORDER BY last", db.Named("last", "Moe"))
 ```

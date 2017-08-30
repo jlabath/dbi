@@ -157,7 +157,7 @@ func forceToTypeOfVal(col *Col, liid int64) (interface{}, error) {
 var ErrNoPointerToSlice = errors.New("Expected dst to be a pointer to a slice")
 
 //ErrNoUnmarshaler is returned when element of slice dst does not implement RowUnmarshaler
-var ErrNoUnmarshaler = errors.New("Elements of slice dst do not implement RowUnmarshaler")
+var ErrNoUnmarshaler = errors.New("Elements of slice dst do not implement DBRowUnmarshaler")
 
 func reflectBaseType(s interface{}) (reflect.Type, error) {
 	//need to reflect and make it
@@ -235,7 +235,7 @@ func (db *H) DB() *sql.DB {
 }
 
 //CreateTable executes CREATE TABLE as per DBRow()
-func (db *H) CreateTable(source RowMarshaler) error {
+func (db *H) CreateTable(source DBRowMarshaler) error {
 	var buf bytes.Buffer
 	buf.WriteString("CREATE TABLE ")
 	buf.WriteString(source.DBName())
@@ -322,8 +322,8 @@ type DBNamer interface {
 	DBName() string
 }
 
-//RowMarshaler composed of needed interfaces to insert a row into sql
-type RowMarshaler interface {
+//DBRowMarshaler composed of needed interfaces to insert a row into sql
+type DBRowMarshaler interface {
 	DBNamer
 	DBRow() []Col
 }
@@ -339,9 +339,9 @@ type DBScanner interface {
 	DBScan(Scanner) error
 }
 
-//RowUnmarshaler is composed of needed interfaces to get a row from sql using a primary key
-type RowUnmarshaler interface {
-	RowMarshaler
+//DBRowUnmarshaler is composed of needed interfaces to get a row from sql using a primary key
+type DBRowUnmarshaler interface {
+	DBRowMarshaler
 	DBScanner
 }
 

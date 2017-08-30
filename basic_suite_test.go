@@ -341,7 +341,7 @@ func (s *BasicSuite) Test6PersonNewDemo(t *testing.T, db *H) {
 		t.Fatal("timestamp should be Zero")
 	}
 	var results []Person
-	newF := func() RowUnmarshaler {
+	newF := func() DBRowUnmarshaler {
 		return &Person{
 			TimeStamp: time.Now(),
 		}

@@ -12,12 +12,12 @@ import (
 var ErrNotFound = errors.New("Record with given primary key not found")
 
 //Get a record from SQL using the supplied PrimaryKey
-func (db *H) Get(s RowUnmarshaler) error {
+func (db *H) Get(s DBRowUnmarshaler) error {
 	return get(db.DB(), db.placeholder, db.lw, s)
 }
 
 //Get a record from SQL using the supplied PrimaryKey
-func get(conn connection, phMaker func() placeHolderFunc, lw io.Writer, s RowUnmarshaler) error {
+func get(conn connection, phMaker func() placeHolderFunc, lw io.Writer, s DBRowUnmarshaler) error {
 	phFunc := phMaker()
 	row := s.DBRow()
 	pkey := getPKFromColumns(row)

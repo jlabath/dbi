@@ -8,11 +8,11 @@ import (
 )
 
 //Insert a record into sql and return a Col with the primary key and any error
-func (db *H) Insert(s RowMarshaler) (Col, error) {
+func (db *H) Insert(s DBRowMarshaler) (Col, error) {
 	return insert(db.conn, db.dbType, db.placeholder, db.lw, s)
 }
 
-func insert(conn connection, dbType dbTyp, phMaker func() placeHolderFunc, lw io.Writer, s RowMarshaler) (Col, error) {
+func insert(conn connection, dbType dbTyp, phMaker func() placeHolderFunc, lw io.Writer, s DBRowMarshaler) (Col, error) {
 	var (
 		buf   bytes.Buffer
 		retPK Col
@@ -58,7 +58,7 @@ func insert(conn connection, dbType dbTyp, phMaker func() placeHolderFunc, lw io
 	return retPK, err
 }
 
-func lastInsertPKID(tx connection, phMaker func() placeHolderFunc, lw io.Writer, s RowMarshaler, result sql.Result) (Col, error) {
+func lastInsertPKID(tx connection, phMaker func() placeHolderFunc, lw io.Writer, s DBRowMarshaler, result sql.Result) (Col, error) {
 	var (
 		buf   bytes.Buffer
 		retPK Col
@@ -117,7 +117,7 @@ func lastInsertPKID(tx connection, phMaker func() placeHolderFunc, lw io.Writer,
 	return retPK, err
 }
 
-func postgresInsert(conn connection, s RowMarshaler, lw io.Writer, sql string, args []interface{}) (Col, error) {
+func postgresInsert(conn connection, s DBRowMarshaler, lw io.Writer, sql string, args []interface{}) (Col, error) {
 	plainInsert := false
 	//first let's make sure this even has a primary key
 	row := s.DBRow()

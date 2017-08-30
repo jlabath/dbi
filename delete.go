@@ -11,11 +11,11 @@ import (
 var ErrNoPrimaryKey = errors.New("No primary key defined. Use PrimaryKey flag")
 
 //Delete deletes a single row from db using the given models PrimaryKey
-func (db *H) Delete(s RowMarshaler) error {
+func (db *H) Delete(s DBRowMarshaler) error {
 	return delete(db.DB(), db.placeholder, db.lw, s)
 }
 
-func delete(conn connection, phMaker func() placeHolderFunc, lw io.Writer, s RowMarshaler) error {
+func delete(conn connection, phMaker func() placeHolderFunc, lw io.Writer, s DBRowMarshaler) error {
 	row := s.DBRow()
 	phFunc := phMaker()
 	pkey := getPKFromColumns(row)
