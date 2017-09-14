@@ -107,6 +107,18 @@ func (s *BasicSuite) Test2InsertSelect(t *testing.T, db *H) {
 			t.Fatalf("Expected INTC must be missing from results")
 		}
 	}
+	//now the same test with @ticker being last
+	var results2 []*Company
+	err = db.Select(&results, "WHERE Ticker != @ticker", sql.Named("ticker", "INTC"))
+	if err != nil {
+		t.Fatalf("Unable to select %s", err)
+	}
+	for _, v := range results2 {
+		if v.Ticker == "INTC" {
+			t.Fatalf("Expected INTC must be missing from results")
+		}
+	}
+
 }
 
 func (s *BasicSuite) Test4AnnualReports(t *testing.T, db *H) {

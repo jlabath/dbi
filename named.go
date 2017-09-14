@@ -52,7 +52,7 @@ func basicFn(pc *parseContext) stateFn {
 func inArgFn(pc *parseContext) stateFn {
 	r, _, err := pc.in.ReadRune()
 	if err == io.EOF {
-		return nil
+		return inArgEOFFn
 	}
 	if err != nil {
 		pc.err = err
@@ -72,4 +72,13 @@ func inArgFn(pc *parseContext) stateFn {
 	}
 	pc.argBuf.WriteRune(r)
 	return inArgFn
+}
+
+func inArgEOFFn(pc *parseContext) stateFn {
+	//write place holder
+	pc.out.WriteString(pc.ph())
+	//append the arg
+	pc.args = append(pc.args, pc.argBuf.String())
+	//back to basic state
+	return nil
 }
