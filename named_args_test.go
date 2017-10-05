@@ -38,6 +38,17 @@ func TestNamedArgsParsing(t *testing.T) {
  AND ID != $2 AND ID > $3`,
 			pgPlaceHolder(),
 		},
+		{
+			`SELECT ID,Name,Ticker
+ FROM company WHERE Ticker IN 
+(SELECT DISTINCT id from cmp where ticker != @ticker)
+ AND ID != @id AND ID > @id`,
+			`SELECT ID,Name,Ticker
+ FROM company WHERE Ticker IN 
+(SELECT DISTINCT id from cmp where ticker != $1)
+ AND ID != $2 AND ID > $3`,
+			pgPlaceHolder(),
+		},
 	}
 
 	for _, test := range tests {
