@@ -7,11 +7,15 @@ import (
 )
 
 //Update a record in SQL using the supplied data
-func (db *H) Update(s DBRowUnmarshaler) error {
-	return update(db.DB(), db.placeholder, db.lw, s)
+func (db *H) Update(s DBRowUnmarshaler, optionFunc StmtOption) error {
+	qc := StmtContext{}
+	if err := initStmContext(&qc, optionFunc); err != nil {
+		return err
+	}
+	return update(db.DB(), &qc, db.placeholder, db.lw, s)
 }
 
-func update(conn connection, phMaker func() placeHolderFunc, lw io.Writer, s DBRowUnmarshaler) error {
+func update(conn connection, qc *StmtContext, phMaker func() placeHolderFunc, lw io.Writer, s DBRowUnmarshaler) error {
 	phFunc := phMaker()
 	row := s.DBRow()
 	pkey := getPKFromColumns(row)
@@ -41,7 +45,7 @@ func update(conn connection, phMaker func() placeHolderFunc, lw io.Writer, s DBR
 	buf.WriteString(phFunc())
 	args = append(args, pkey.Val)
 	fmt.Fprintln(lw, buf.String(), args)
-	res, err := conn.Exec(buf.String(), args...)
+	res, err := conn.ExecContext(qc.context, buf.String(), args...)
 	if err == nil {
 		if n, err := res.RowsAffected(); err == nil && n == 0 {
 			return ErrNotFound

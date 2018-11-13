@@ -61,20 +61,20 @@ p := &Person{
 }
 
 //create table
-err := db.CreateTable(p)
+err := db.CreateTable(p, nil)
 
 //insert
-pk, err := db.Insert(p)
+pk, err := db.Insert(p, nil)
 
 //get
 up := &Person{ID: pk.Val.(int)}
-err = db.Get(up)
+err = db.Get(up, nil)
 
 //update
 up.LastName = "Moe"
-err = db.Update(up)
+err = db.Update(up, nil)
 
 //query
 var persons []Person
-err := db.Select(&persons, "WHERE last = @last ORDER BY last", db.Named("last", "Moe"))
+err := db.Select(&persons, nil, "WHERE last = @last ORDER BY last", db.Named("last", "Moe"))
 ```

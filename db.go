@@ -235,7 +235,11 @@ func (db *H) DB() *sql.DB {
 }
 
 //CreateTable executes CREATE TABLE as per DBRow()
-func (db *H) CreateTable(source DBRowMarshaler) error {
+func (db *H) CreateTable(source DBRowMarshaler, optionFunc StmtOption) error {
+	qc := StmtContext{}
+	if err := initStmContext(&qc, optionFunc); err != nil {
+		return err
+	}
 	var buf bytes.Buffer
 	buf.WriteString("CREATE TABLE ")
 	buf.WriteString(source.DBName())
@@ -249,18 +253,22 @@ func (db *H) CreateTable(source DBRowMarshaler) error {
 		buf.WriteString(guessSQLType(c))
 	}
 	buf.WriteString(")")
-	_, err := db.conn.Exec(buf.String())
+	_, err := db.conn.ExecContext(qc.context, buf.String())
 	fmt.Fprintln(db.lw, buf.String())
 	return err
 }
 
 //DropTable executes DROP TABLE
-func (db *H) DropTable(source DBNamer) error {
+func (db *H) DropTable(source DBNamer, optionFunc StmtOption) error {
+	qc := StmtContext{}
+	if err := initStmContext(&qc, optionFunc); err != nil {
+		return err
+	}
 	var buf bytes.Buffer
 	buf.WriteString("DROP TABLE ")
 	buf.WriteString(source.DBName())
 	fmt.Fprintln(db.lw, buf.String())
-	_, err := db.conn.Exec(buf.String())
+	_, err := db.conn.ExecContext(qc.context, buf.String())
 	return err
 }
 
@@ -348,8 +356,7 @@ type DBRowUnmarshaler interface {
 //connection is and abstraction for either sql.DB or sql.Tx
 //in other words either sql connections or sql transactions will satisfy the interface
 type connection interface {
-	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
-	QueryRow(query string, args ...interface{}) *sql.Row
-	Exec(query string, args ...interface{}) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }

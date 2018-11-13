@@ -47,8 +47,12 @@ func (tx *Tx) Rollback() error {
 }
 
 //Insert a record into sql and return a Col with the primary key and any error
-func (tx *Tx) Insert(s DBRowMarshaler) (Col, error) {
-	return insert(tx.tx, tx.dbi.dbType, tx.dbi.placeholder, tx.dbi.lw, s)
+func (tx *Tx) Insert(s DBRowMarshaler, optionFunc StmtOption) (Col, error) {
+	qc := StmtContext{}
+	if err := initStmContext(&qc, optionFunc); err != nil {
+		return Col{}, err
+	}
+	return insert(tx.tx, &qc, tx.dbi.dbType, tx.dbi.placeholder, tx.dbi.lw, s)
 }
 
 //Select runs an SQL query and populates dst and returns an error if any.
@@ -56,22 +60,16 @@ func (tx *Tx) Insert(s DBRowMarshaler) (Col, error) {
 //The where is any where/order by/limit type of clause - if empty it will simply do SELECT col1,col2,... FROM table_name
 //args are any params to be used in the SQL query to replace ?
 //It expects dst to be a pointer to a slice of RowUnmarshaler(s), and it will return an error if it is not.
-func (tx *Tx) Select(dst interface{}, where string, args ...sql.NamedArg) error {
-	return tx.SelectOption(dst, nil, where, args...)
-}
-
-//SelectOption is functionaly the same as Select however by allowing the user to pass options it is possible to perform
+//it is possible to perform
 //additional initializations before the DBName, DBRow, or DBScan are even called.
 //it's also possible to provide context to allow cancellable queries introduced in go 1.8
-func (tx *Tx) SelectOption(
+func (tx *Tx) Select(
 	dst interface{},
 	optionFunc StmtOption,
 	where string, args ...sql.NamedArg) error {
 	qc := StmtContext{}
-	if optionFunc != nil {
-		if err := optionFunc(&qc); err != nil {
-			return err
-		}
+	if err := initStmContext(&qc, optionFunc); err != nil {
+		return err
 	}
 	return selectQuery(
 		tx.tx,
@@ -90,16 +88,28 @@ func (tx *Tx) DBI() *H {
 }
 
 //Get a record from SQL using the supplied PrimaryKey
-func (tx *Tx) Get(s DBRowUnmarshaler) error {
-	return get(tx.tx, tx.dbi.placeholder, tx.dbi.lw, s)
+func (tx *Tx) Get(s DBRowUnmarshaler, optionFunc StmtOption) error {
+	qc := StmtContext{}
+	if err := initStmContext(&qc, optionFunc); err != nil {
+		return err
+	}
+	return get(tx.tx, &qc, tx.dbi.placeholder, tx.dbi.lw, s)
 }
 
 //Update a record in SQL using the supplied data
-func (tx *Tx) Update(s DBRowUnmarshaler) error {
-	return update(tx.tx, tx.dbi.placeholder, tx.dbi.lw, s)
+func (tx *Tx) Update(s DBRowUnmarshaler, optionFunc StmtOption) error {
+	qc := StmtContext{}
+	if err := initStmContext(&qc, optionFunc); err != nil {
+		return err
+	}
+	return update(tx.tx, &qc, tx.dbi.placeholder, tx.dbi.lw, s)
 }
 
 //Delete deletes a single row from db using the given models PrimaryKey
-func (tx *Tx) Delete(s DBRowMarshaler) error {
-	return delete(tx.tx, tx.dbi.placeholder, tx.dbi.lw, s)
+func (tx *Tx) Delete(s DBRowMarshaler, optionFunc StmtOption) error {
+	qc := StmtContext{}
+	if err := initStmContext(&qc, optionFunc); err != nil {
+		return err
+	}
+	return delete(tx.tx, &qc, tx.dbi.placeholder, tx.dbi.lw, s)
 }

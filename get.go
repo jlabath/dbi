@@ -2,6 +2,7 @@ package dbi
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -11,13 +12,30 @@ import (
 //ErrNotFound returned when the row with the given primary key was not found
 var ErrNotFound = errors.New("Record with given primary key not found")
 
-//Get a record from SQL using the supplied PrimaryKey
-func (db *H) Get(s DBRowUnmarshaler) error {
-	return get(db.DB(), db.placeholder, db.lw, s)
+func initStmContext(qc *StmtContext, optionFunc StmtOption) error {
+	if optionFunc != nil {
+		if err := optionFunc(qc); err != nil {
+			return err
+		}
+	}
+	//must have context
+	if qc.context == nil {
+		qc.context = context.Background()
+	}
+	return nil
 }
 
 //Get a record from SQL using the supplied PrimaryKey
-func get(conn connection, phMaker func() placeHolderFunc, lw io.Writer, s DBRowUnmarshaler) error {
+func (db *H) Get(s DBRowUnmarshaler, optionFunc StmtOption) error {
+	qc := StmtContext{}
+	if err := initStmContext(&qc, optionFunc); err != nil {
+		return err
+	}
+	return get(db.DB(), &qc, db.placeholder, db.lw, s)
+}
+
+//Get a record from SQL using the supplied PrimaryKey
+func get(conn connection, qc *StmtContext, phMaker func() placeHolderFunc, lw io.Writer, s DBRowUnmarshaler) error {
 	phFunc := phMaker()
 	row := s.DBRow()
 	pkey := getPKFromColumns(row)
@@ -39,7 +57,7 @@ func get(conn connection, phMaker func() placeHolderFunc, lw io.Writer, s DBRowU
 	buf.WriteString("=")
 	buf.WriteString(phFunc())
 	fmt.Fprintln(lw, buf.String(), pkey.Val)
-	dbrow := conn.QueryRow(buf.String(), pkey.Val)
+	dbrow := conn.QueryRowContext(qc.context, buf.String(), pkey.Val)
 	err := s.DBScan(dbrow)
 	if err == sql.ErrNoRows {
 		return ErrNotFound

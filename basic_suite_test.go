@@ -17,8 +17,8 @@ func (s *BasicSuite) Name() string {
 
 func (s *BasicSuite) Test1Create(t *testing.T, db *H) {
 	cp := &Company{}
-	db.DropTable(cp)
-	err := db.CreateTable(cp)
+	db.DropTable(cp, nil)
+	err := db.CreateTable(cp, nil)
 	if err != nil {
 		t.Fatalf("could not create Company table %s", err)
 	}
@@ -26,13 +26,13 @@ func (s *BasicSuite) Test1Create(t *testing.T, db *H) {
 	cp.ID = 1
 	cp.Name = "IBM"
 	cp.Ticker = "IBM"
-	dbclmn, err := db.Insert(cp)
+	dbclmn, err := db.Insert(cp, nil)
 	if err != nil {
 		t.Fatalf("could not insert a record %s", err)
 	}
 	//get a record
 	c1 := Company{ID: dbclmn.Val.(int64)}
-	err = db.Get(&c1)
+	err = db.Get(&c1, nil)
 	if err != nil {
 		t.Fatalf("could not get a record %s", err)
 	}
@@ -47,14 +47,14 @@ func (s *BasicSuite) Test1Create(t *testing.T, db *H) {
 	}
 	//update
 	c1.Name = "International Business Machines"
-	err = db.Update(&c1)
+	err = db.Update(&c1, nil)
 
 	if err != nil {
 		t.Fatalf("could not update a record %s", err)
 	}
 
 	c2 := Company{ID: c1.ID}
-	err = db.Get(&c2)
+	err = db.Get(&c2, nil)
 	if err != nil {
 		t.Fatalf("could not get a record %s", err)
 	}
@@ -77,8 +77,8 @@ func (s *BasicSuite) Test1Create(t *testing.T, db *H) {
 
 func (s *BasicSuite) Test2InsertSelect(t *testing.T, db *H) {
 	cp := &Company{}
-	db.DropTable(cp)
-	err := db.CreateTable(cp)
+	db.DropTable(cp, WithContext(context.Background()))
+	err := db.CreateTable(cp, WithContext(context.Background()))
 	if err != nil {
 		t.Fatalf("Unable to create table %s", err)
 	}
@@ -92,13 +92,13 @@ func (s *BasicSuite) Test2InsertSelect(t *testing.T, db *H) {
 	for _, v := range sample {
 		cp.Name = v[0]
 		cp.Ticker = v[1]
-		_, err = db.Insert(cp)
+		_, err = db.Insert(cp, WithContext(context.Background()))
 		if err != nil {
 			t.Fatalf("Unable to insert %s", err)
 		}
 	}
 	var results []*Company
-	err = db.Select(&results, "WHERE Ticker != @ticker ORDER BY ID", sql.Named("ticker", "INTC"))
+	err = db.Select(&results, nil, "WHERE Ticker != @ticker ORDER BY ID", sql.Named("ticker", "INTC"))
 	if err != nil {
 		t.Fatalf("Unable to select %s", err)
 	}
@@ -109,7 +109,7 @@ func (s *BasicSuite) Test2InsertSelect(t *testing.T, db *H) {
 	}
 	//now the same test with @ticker being last
 	var results2 []*Company
-	err = db.Select(&results, "WHERE Ticker != @ticker", sql.Named("ticker", "INTC"))
+	err = db.Select(&results, nil, "WHERE Ticker != @ticker", sql.Named("ticker", "INTC"))
 	if err != nil {
 		t.Fatalf("Unable to select %s", err)
 	}
@@ -123,24 +123,24 @@ func (s *BasicSuite) Test2InsertSelect(t *testing.T, db *H) {
 
 func (s *BasicSuite) Test4AnnualReports(t *testing.T, db *H) {
 	cp := Company{ID: 1}
-	if err := db.Get(&cp); err != nil {
+	if err := db.Get(&cp, nil); err != nil {
 		t.Fatal(err)
 	}
 	ar := &AnnualReport{
 		CompanyID: cp.ID,
 		Year:      2015,
 		Sales:     big.NewInt(100000000000)}
-	db.DropTable(ar)
-	err := db.CreateTable(ar)
+	db.DropTable(ar, nil)
+	err := db.CreateTable(ar, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pk, err := db.Insert(ar)
+	pk, err := db.Insert(ar, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ar2 := &AnnualReport{ID: pk.Val.(int64)}
-	err = db.Get(ar2)
+	err = db.Get(ar2, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,13 +159,13 @@ func (s *BasicSuite) Test4AnnualReports(t *testing.T, db *H) {
 	}
 	net := big.NewInt(50000000000)
 	ar2.NetIncome = net
-	err = db.Update(ar2)
+	err = db.Update(ar2, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	ar3 := &AnnualReport{ID: ar2.ID}
-	err = db.Get(ar3)
+	err = db.Get(ar3, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func (s *BasicSuite) Test4AnnualReports(t *testing.T, db *H) {
 
 	//now run query on the reports
 	var results []AnnualReport
-	err = db.Select(&results, "")
+	err = db.Select(&results, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,17 +224,17 @@ func (s *BasicSuite) Test5PersonDemo(t *testing.T, db *H) {
 		FirstName: "John",
 		LastName:  "Doe",
 	}
-	db.DropTable(p)
-	err := db.CreateTable(p)
+	db.DropTable(p, nil)
+	err := db.CreateTable(p, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pk, err := db.Insert(p)
+	pk, err := db.Insert(p, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	up := &Person{ID: pk.Val.(int)}
-	err = db.Get(up)
+	err = db.Get(up, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,13 +243,13 @@ func (s *BasicSuite) Test5PersonDemo(t *testing.T, db *H) {
 	}
 
 	up.LastName = "Moe"
-	err = db.Update(up)
+	err = db.Update(up, WithContext(context.Background()))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var results []Person
-	err = db.Select(&results, "WHERE last = @last ORDER BY last", sql.Named("last", "Moe"))
+	err = db.Select(&results, nil, "WHERE last = @last ORDER BY last", sql.Named("last", "Moe"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +262,7 @@ func (s *BasicSuite) Test5PersonDemo(t *testing.T, db *H) {
 		FirstName: "A.T.",
 		LastName:  "Tappman",
 	}
-	pk, err = db.Insert(p1)
+	pk, err = db.Insert(p1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +277,9 @@ func (s *BasicSuite) Test5PersonDemo(t *testing.T, db *H) {
 		t.Fatal(err)
 	}
 
-	newpk, err := lastInsertPKID(tx.tx, tx.dbi.placeholder, tx.dbi.lw, p1, BustedResult{})
+	qc := StmtContext{}
+	initStmContext(&qc, nil)
+	newpk, err := lastInsertPKID(tx.tx, &qc, tx.dbi.placeholder, tx.dbi.lw, p1, BustedResult{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,23 +291,23 @@ func (s *BasicSuite) Test5PersonDemo(t *testing.T, db *H) {
 		t.Fatal(err)
 	}
 	p1.ID = newpk.Val.(int)
-	err = db.Get(p1)
+	err = db.Get(p1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = db.Delete(p1)
+	err = db.Delete(p1, WithContext(context.Background()))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	p2 := Person{ID: p1.ID}
-	err = db.Get(&p2)
+	err = db.Get(&p2, nil)
 	if err != ErrNotFound {
 		t.Fatalf("want %v got %v", ErrNotFound, err)
 	}
 	p3 := Person{ID: 243}
-	err = db.Get(&p3)
+	err = db.Get(&p3, nil)
 
 	if err != ErrNotFound {
 		t.Fatalf("want %v got %v", ErrNotFound, err)
@@ -313,7 +315,7 @@ func (s *BasicSuite) Test5PersonDemo(t *testing.T, db *H) {
 
 	p3.FirstName = "Steve"
 	p3.LastName = "Blank"
-	err = db.Update(&p3)
+	err = db.Update(&p3, nil)
 	if err != ErrNotFound {
 		t.Fatalf("want %v got %v", ErrNotFound, err)
 	}
@@ -324,20 +326,20 @@ func (s *BasicSuite) Test6PersonNewDemo(t *testing.T, db *H) {
 		FirstName: "John",
 		LastName:  "Doe",
 	}
-	err := db.DropTable(p)
+	err := db.DropTable(p, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = db.CreateTable(p)
+	err = db.CreateTable(p, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pk, err := db.Insert(p)
+	pk, err := db.Insert(p, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	up := &Person{ID: pk.Val.(int)}
-	err = db.Get(up)
+	err = db.Get(up, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -345,7 +347,7 @@ func (s *BasicSuite) Test6PersonNewDemo(t *testing.T, db *H) {
 		t.Fatalf("want %s got %s", "Doe", up.LastName)
 	}
 	up.LastName = "Moe"
-	err = db.Update(up)
+	err = db.Update(up, WithContext(context.Background()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +361,7 @@ func (s *BasicSuite) Test6PersonNewDemo(t *testing.T, db *H) {
 		}
 	}
 	ctx := context.Background()
-	err = db.SelectOption(
+	err = db.Select(
 		&results,
 		Compose(
 			WithNewFunc(newF),
@@ -382,8 +384,8 @@ func (s *BasicSuite) Test6PersonNewDemo(t *testing.T, db *H) {
 
 func (s *BasicSuite) Test7InsertSelectTransaction(t *testing.T, db *H) {
 	cp := &Company{}
-	db.DropTable(cp)
-	err := db.CreateTable(cp)
+	db.DropTable(cp, nil)
+	err := db.CreateTable(cp, nil)
 	if err != nil {
 		t.Fatalf("Unable to create table %s", err)
 	}
@@ -401,13 +403,13 @@ func (s *BasicSuite) Test7InsertSelectTransaction(t *testing.T, db *H) {
 	for _, v := range sample {
 		cp.Name = v[0]
 		cp.Ticker = v[1]
-		_, err = tx.Insert(cp)
+		_, err = tx.Insert(cp, nil)
 		if err != nil {
 			t.Fatalf("Unable to insert %s", err)
 		}
 	}
 	var results []*Company
-	err = tx.Select(&results, "WHERE Ticker != @ticker ORDER BY ID", db.Named("ticker", "INTC"))
+	err = tx.Select(&results, nil, "WHERE Ticker != @ticker ORDER BY ID", db.Named("ticker", "INTC"))
 	if err != nil {
 		t.Fatalf("Unable to select %s", err)
 	}
@@ -432,8 +434,8 @@ func (s *BasicSuite) Test8PersonDemoInTransaction(t *testing.T, db *H) {
 		FirstName: "John",
 		LastName:  "Doe",
 	}
-	db.DropTable(p)
-	err := db.CreateTable(p)
+	db.DropTable(p, nil)
+	err := db.CreateTable(p, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -443,12 +445,12 @@ func (s *BasicSuite) Test8PersonDemoInTransaction(t *testing.T, db *H) {
 		t.Fatal(err)
 	}
 
-	pk, err := tx.Insert(p)
+	pk, err := tx.Insert(p, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	up := &Person{ID: pk.Val.(int)}
-	err = tx.Get(up)
+	err = tx.Get(up, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,13 +459,13 @@ func (s *BasicSuite) Test8PersonDemoInTransaction(t *testing.T, db *H) {
 	}
 
 	up.LastName = "Moe"
-	err = tx.Update(up)
+	err = tx.Update(up, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var results []Person
-	err = tx.Select(&results, "WHERE last = @last ORDER BY last", sql.Named("last", "Moe"))
+	err = tx.Select(&results, nil, "WHERE last = @last ORDER BY last", sql.Named("last", "Moe"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -476,7 +478,7 @@ func (s *BasicSuite) Test8PersonDemoInTransaction(t *testing.T, db *H) {
 		FirstName: "A.T.",
 		LastName:  "Tappman",
 	}
-	pk, err = tx.Insert(p1)
+	pk, err = tx.Insert(p1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,23 +489,23 @@ func (s *BasicSuite) Test8PersonDemoInTransaction(t *testing.T, db *H) {
 	}
 
 	p1.ID = pk.Val.(int)
-	err = tx.Get(p1)
+	err = tx.Get(p1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = tx.Delete(p1)
+	err = tx.Delete(p1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	p2 := Person{ID: p1.ID}
-	err = tx.Get(&p2)
+	err = tx.Get(&p2, nil)
 	if err != ErrNotFound {
 		t.Fatalf("want %v got %v", ErrNotFound, err)
 	}
 	p3 := Person{ID: 243}
-	err = tx.Get(&p3)
+	err = tx.Get(&p3, nil)
 
 	if err != ErrNotFound {
 		t.Fatalf("want %v got %v", ErrNotFound, err)
@@ -511,7 +513,7 @@ func (s *BasicSuite) Test8PersonDemoInTransaction(t *testing.T, db *H) {
 
 	p3.FirstName = "Steve"
 	p3.LastName = "Blank"
-	err = tx.Update(&p3)
+	err = tx.Update(&p3, nil)
 	if err != ErrNotFound {
 		t.Fatalf("want %v got %v", ErrNotFound, err)
 	}
@@ -529,12 +531,12 @@ func (s *BasicSuite) Test8PersonDemoInTransaction(t *testing.T, db *H) {
 	if err != nil {
 		t.Error(err)
 	}
-	pk, err = tx.Insert(p4)
+	pk, err = tx.Insert(p4, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	p5 := &Person{ID: pk.Val.(int)}
-	err = tx.Get(p5)
+	err = tx.Get(p5, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -545,7 +547,8 @@ func (s *BasicSuite) Test8PersonDemoInTransaction(t *testing.T, db *H) {
 	if err != nil {
 		t.Error(err)
 	}
-	err = db.Get(p5)
+	ctx := context.Background()
+	err = db.Get(p5, WithContext(ctx))
 	if err == nil {
 		t.Error("Expected error when retrieving rolled back data")
 	}

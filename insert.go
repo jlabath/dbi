@@ -8,11 +8,15 @@ import (
 )
 
 //Insert a record into sql and return a Col with the primary key and any error
-func (db *H) Insert(s DBRowMarshaler) (Col, error) {
-	return insert(db.conn, db.dbType, db.placeholder, db.lw, s)
+func (db *H) Insert(s DBRowMarshaler, optionFunc StmtOption) (Col, error) {
+	qc := StmtContext{}
+	if err := initStmContext(&qc, optionFunc); err != nil {
+		return Col{}, err
+	}
+	return insert(db.conn, &qc, db.dbType, db.placeholder, db.lw, s)
 }
 
-func insert(conn connection, dbType dbTyp, phMaker func() placeHolderFunc, lw io.Writer, s DBRowMarshaler) (Col, error) {
+func insert(conn connection, qc *StmtContext, dbType dbTyp, phMaker func() placeHolderFunc, lw io.Writer, s DBRowMarshaler) (Col, error) {
 	var (
 		buf   bytes.Buffer
 		retPK Col
@@ -44,21 +48,21 @@ func insert(conn connection, dbType dbTyp, phMaker func() placeHolderFunc, lw io
 	sql := buf.String()
 	if dbType == postgres {
 		//postgres inserts should use returning
-		return postgresInsert(conn, s, lw, sql, args)
+		return postgresInsert(conn, qc, s, lw, sql, args)
 	}
 	fmt.Fprintln(lw, sql, args)
-	result, err := conn.Exec(sql, args...)
+	result, err := conn.ExecContext(qc.context, sql, args...)
 	if err != nil {
 		return retPK, err
 	}
-	retPK, err = lastInsertPKID(conn, phMaker, lw, s, result)
+	retPK, err = lastInsertPKID(conn, qc, phMaker, lw, s, result)
 	if err != nil {
 		return retPK, err
 	}
 	return retPK, err
 }
 
-func lastInsertPKID(tx connection, phMaker func() placeHolderFunc, lw io.Writer, s DBRowMarshaler, result sql.Result) (Col, error) {
+func lastInsertPKID(tx connection, qc *StmtContext, phMaker func() placeHolderFunc, lw io.Writer, s DBRowMarshaler, result sql.Result) (Col, error) {
 	var (
 		buf   bytes.Buffer
 		retPK Col
@@ -106,7 +110,7 @@ func lastInsertPKID(tx connection, phMaker func() placeHolderFunc, lw io.Writer,
 	buf.WriteString(pk.Name)
 	buf.WriteString(" DESC ") //presumably order by highest first
 	fmt.Fprintln(lw, buf.String(), args)
-	rows, err := tx.Query(buf.String(), args...)
+	rows, err := tx.QueryContext(qc.context, buf.String(), args...)
 	if err != nil {
 		return retPK, err
 	}
@@ -117,7 +121,7 @@ func lastInsertPKID(tx connection, phMaker func() placeHolderFunc, lw io.Writer,
 	return retPK, err
 }
 
-func postgresInsert(conn connection, s DBRowMarshaler, lw io.Writer, sql string, args []interface{}) (Col, error) {
+func postgresInsert(conn connection, qc *StmtContext, s DBRowMarshaler, lw io.Writer, sql string, args []interface{}) (Col, error) {
 	plainInsert := false
 	//first let's make sure this even has a primary key
 	row := s.DBRow()
@@ -128,7 +132,7 @@ func postgresInsert(conn connection, s DBRowMarshaler, lw io.Writer, sql string,
 
 	if plainInsert {
 		fmt.Fprintln(lw, sql, args)
-		_, err := conn.Exec(sql, args...)
+		_, err := conn.ExecContext(qc.context, sql, args...)
 		return Col{}, err
 	}
 
@@ -136,7 +140,7 @@ func postgresInsert(conn connection, s DBRowMarshaler, lw io.Writer, sql string,
 	sql = fmt.Sprintf("%s RETURNING %s", sql, pk.Name)
 	fmt.Fprintln(lw, sql, args)
 	var liid int64
-	if err := conn.QueryRow(sql, args...).Scan(&liid); err != nil {
+	if err := conn.QueryRowContext(qc.context, sql, args...).Scan(&liid); err != nil {
 		return *pk, err
 	}
 	cnvtLiid, err := forceToTypeOfVal(pk, liid)

@@ -13,23 +13,16 @@ import (
 //The where is any where/order by/limit type of clause - if empty it will simply do SELECT col1,col2,... FROM table_name
 //args are any params to be used in the SQL query to replace ?
 //It expects dst to be a pointer to a slice of RowUnmarshaler(s), and it will return an error if it is not.
-func (db *H) Select(dst interface{}, where string, args ...sql.NamedArg) error {
-	return db.SelectOption(dst, nil, where, args...)
-}
-
-//SelectOption is functionaly the same as Select however by allowing the user to pass options it is possible to perform
-//additional initializations before the DBName, DBRow, or DBScan are even called.
+//additional initializations are possible via StmtOption
 //it's also possible to provide context to allow cancellable queries introduced in go 1.8
-func (db *H) SelectOption(
+func (db *H) Select(
 	dst interface{},
 	optionFunc StmtOption,
 	where string,
 	args ...sql.NamedArg) error {
 	qc := StmtContext{}
-	if optionFunc != nil {
-		if err := optionFunc(&qc); err != nil {
-			return err
-		}
+	if err := initStmContext(&qc, optionFunc); err != nil {
+		return err
 	}
 	return selectQuery(db.conn, db.placeholder, db.namedArgPrefix, db.lw, dst, &qc, where, args...)
 }
@@ -102,12 +95,7 @@ func selectQuery(
 	//log the query to logger
 	fmt.Fprintln(lw, query, qargs)
 	//execute
-	var rows *sql.Rows
-	if qc.context != nil {
-		rows, err = conn.QueryContext(qc.context, query, qargs...)
-	} else {
-		rows, err = conn.Query(query, qargs...)
-	}
+	rows, err := conn.QueryContext(qc.context, query, qargs...)
 	if err != nil {
 		return err
 	}
