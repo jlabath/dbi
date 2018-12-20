@@ -19,4 +19,4 @@ env:
     - MYSQLUSER=root
 
 script:
-  - go test -v -race -timeout 30s
+  - go test -v -race -timeout 30s v3/*.go
