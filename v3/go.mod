@@ -1,4 +1,4 @@
-module github.com/jlabath/dbi
+module github.com/jlabath/dbi/v3
 
 require (
 	github.com/go-sql-driver/mysql v1.4.0
