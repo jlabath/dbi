@@ -1,8 +1,7 @@
 language: go
 
 go:
-  - 1.8
-  - 1.9
+  - "1.11"
 
 services:
   - postgresql
@@ -18,12 +17,6 @@ env:
     - PGUSER=postgres
     - PGHOST="127.0.0.1"
     - MYSQLUSER=root
-
-install:
-  - go get github.com/lib/pq
-  - go get github.com/mattn/go-sqlite3
-  - go get github.com/jackc/pgx
-  - go get github.com/go-sql-driver/mysql
 
 script:
   - go test -v -race -timeout 30s
