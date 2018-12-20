@@ -1,6 +1,6 @@
 ### DBI
 
-[![GoDoc](https://godoc.org/github.com/jlabath/dbi?status.svg)](https://godoc.org/github.com/jlabath/dbi)
+[![GoDoc](https://godoc.org/github.com/jlabath/dbi?status.svg)](https://godoc.org/github.com/jlabath/dbi/v3)
 [![Travis](https://www.travis-ci.org/jlabath/dbi.svg?branch=master)](https://www.travis-ci.org/jlabath/dbi)   
 
 Opinionated database/sql wrapper.  

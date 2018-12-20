@@ -17,6 +17,7 @@ env:
     - PGUSER=postgres
     - PGHOST="127.0.0.1"
     - MYSQLUSER=root
+    - GO111MODULE=on
 
 script:
   - go test -v -race -timeout 30s v3/*.go
